@@ -436,6 +436,12 @@
   </div>
 
   <div class="dev-row" style="margin-top:4px">
+    <label>Vertical Erosion <span class="dev-help" title="Toggle water's ability to erode downward into terrain. OFF = water only erodes banks laterally, never digs deeper.">?</span></label>
+    <button id="btn-vert-erode" class="active" onclick="SIM_VERTICAL_EROSION=!SIM_VERTICAL_EROSION; this.textContent=SIM_VERTICAL_EROSION?'ON':'OFF'; this.classList.toggle('active',SIM_VERTICAL_EROSION)">ON</button>
+  </div>
+
+  <h4>Tectonics</h4>
+  <div class="dev-row" style="margin-top:4px">
     <label>Fault Lines <span class="dev-help" title="Overlay showing plate boundaries. Red = convergent (mountains), blue = divergent (rifts), yellow = transform (quakes).">?</span></label>
     <button id="btn-faults" onclick="showFaultLines=!showFaultLines; this.textContent=showFaultLines?'ON':'OFF'; this.classList.toggle('active',showFaultLines)">OFF</button>
   </div>
@@ -520,6 +526,18 @@
       <span class="gen-val" id="gen-sea-level-val">20</span>
     </div>
 
+    <div class="gen-row">
+      <label>Num Plates</label>
+      <input type="range" id="gen-plates" min="3" max="15" value="0">
+      <span class="gen-val" id="gen-plates-val">auto</span>
+    </div>
+
+    <div class="gen-row">
+      <label>Erosion Detail</label>
+      <input type="range" id="gen-erosion-passes" min="0" max="3" step="0.5" value="1">
+      <span class="gen-val" id="gen-erosion-passes-val">1.0</span>
+    </div>
+
     <div class="gen-sep">Water</div>
 
     <div class="gen-row">
@@ -592,7 +610,9 @@ let GW, GH;
 let terrain, origTerrain;
 let drainDist;      // distance to nearest ocean/drain cell — shortest path routing
 let saturation;     // soil saturation per cell
-let hydraulicHead;  // pressure field — propagated from ocean along connected water
+let hydraulicHead;    // pressure field — propagated from ocean along connected water
+let trappedPressure;  // force of disconnected water bodies (not connected to ocean)
+let isOceanCell;      // Uint8Array — true only for below-sea-level cells connected to map edge
 let initialFlowAccum; // flow accumulation from terrain generation — where rivers naturally form
 let water, sediment, hardness, hardnessNoise;
 let fluxL, fluxR, fluxU, fluxD;
@@ -622,6 +642,8 @@ let genMtnHeight   = 0.50;
 let genRainfall    = 0;
 let genMapSize     = 200;
 let genForceOcean  = true;
+let genNumPlates   = 0;   // 0 = auto (based on terrain type)
+let genErosionPasses = 1; // multiplier for particle erosion count (0=none, 3=heavy)
 let rainfallRate   = 0;
 let seaLevel       = 0.20;
 
@@ -641,6 +663,8 @@ let SIM_RIFT_RATE = 0.0004;     // valley formation rate at divergent boundaries
 let SIM_QUAKE_THRESHOLD = 2.0;  // transform stress threshold for earthquake
 let SIM_FAULT_EROSION = 0.01;   // extra erosion rate at fault zones
 let SIM_SLOPE_COLLAPSE = 30;   // how aggressively steep slopes collapse (0=off, 30=default)
+let SIM_VERTICAL_EROSION = true; // toggle: water can erode downward into terrain
+let SIM_LATERAL_ONLY = false;    // when true, water only erodes banks, never bed
 let showFaultLines = false;     // debug overlay for tectonic boundaries
 
 // ═══════════════════════════════════════════════════════════════════
@@ -749,6 +773,8 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   else if (type === 'continent') { numPlates = 9; hasContinentalMask = true; }
   else if (type === 'mountain_range') { numPlates = 11; hasContinentalMask = false; }
   else { numPlates = 5; hasContinentalMask = false; } // valley
+  // Override if user specified plate count
+  if (genNumPlates > 0) numPlates = genNumPlates;
 
   // Plate seed points (scattered using noise for deterministic placement)
   // Saved to global state for live tectonic movement
@@ -998,15 +1024,16 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   // downhill eroding terrain along its path. This carves dendritic drainage
   // networks — connected channel systems where every point has a clear path
   // to the ocean. Without this, the terrain is raw noise full of random pits.
-  const NUM_PARTICLES = GW * GH * 3;  // 3 particles per cell on average
-  const P_INERTIA = 0.3;    // how much particle keeps its direction vs following gradient
-  const P_CAPACITY = 8.0;   // sediment carrying capacity multiplier
-  const P_DEPOSITION = 0.02;
-  const P_EROSION = 0.03;
-  const P_EVAP = 0.01;
+  // Particle count scaled by erosion detail setting (0 = skip, 3 = heavy)
+  const NUM_PARTICLES = Math.round(GW * GH * genErosionPasses);
+  const P_INERTIA = 0.4;    // more inertia = smoother paths
+  const P_CAPACITY = 6.0;
+  const P_DEPOSITION = 0.03;
+  const P_EROSION = 0.015;  // halved — gentler per-step erosion
+  const P_EVAP = 0.005;     // slower evap = longer paths = more connected channels
   const P_GRAVITY = 10;
   const P_MIN_SLOPE = 0.001;
-  const P_RADIUS = 2;       // erosion brush radius
+  const P_RADIUS = 3;       // wider brush = smoother channels (was 2)
 
   // Track flow accumulation: how many particles flow through each cell
   const flowAccum = new Float32Array(N);
@@ -1095,13 +1122,13 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
     }
   }
 
-  // Final smoothing pass to clean up erosion artifacts
-  for (let pass = 0; pass < 2; pass++) {
+  // Aggressive smoothing to eliminate pockmarks from particle erosion
+  for (let pass = 0; pass < 6; pass++) {
     for (let y = 1; y < GH - 1; y++) {
       for (let x = 1; x < GW - 1; x++) {
         const i = y * GW + x;
         const avg = (t[i-1] + t[i+1] + t[i-GW] + t[i+GW]) * 0.25;
-        t[i] += (avg - t[i]) * 0.2;
+        t[i] += (avg - t[i]) * 0.3;
       }
     }
   }
@@ -1111,6 +1138,9 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   for (let i = 0; i < N; i++) { if (t[i] < mn2) mn2 = t[i]; if (t[i] > mx2) mx2 = t[i]; }
   const range2 = mx2 - mn2 || 1;
   for (let i = 0; i < N; i++) t[i] = (t[i] - mn2) / range2;
+
+  // Depression fill removed — it creates unnaturally flat plains.
+  // Water drains via hydraulic head network + particle-carved channels instead.
 
   hardnessNoise = hn;
   initialFlowAccum = flowAccum;
@@ -1187,6 +1217,41 @@ function layerColor(i) {
 // ═══════════════════════════════════════════════════════════════════
 // OCEAN LEVEL  (isolated for future tide support)
 // ═══════════════════════════════════════════════════════════════════
+// Compute which cells are ocean: below sea level AND connected to map edge
+// via other below-sea-level cells. Inland depressions below sea level are NOT ocean.
+function computeOceanCells() {
+  const N = GW * GH;
+  isOceanCell = new Uint8Array(N);
+  const queue = [];
+
+  // Seed: edge cells below sea level
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      if ((x === 0 || x === GW-1 || y === 0 || y === GH-1) && terrain[i] < seaLevel) {
+        isOceanCell[i] = 1;
+        queue.push(i);
+      }
+    }
+  }
+
+  // BFS: flood fill to all connected below-sea-level cells
+  let head = 0;
+  while (head < queue.length) {
+    const i = queue[head++];
+    const x = i % GW, y = (i / GW) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+      const ni = ny * GW + nx;
+      if (!isOceanCell[ni] && terrain[ni] < seaLevel) {
+        isOceanCell[ni] = 1;
+        queue.push(ni);
+      }
+    }
+  }
+}
+
 // Compute distance from each cell to nearest drain (ocean cell or below-sea-level edge)
 // BFS from all drain cells outward. Used to bias flow toward shortest path to ocean.
 function computeDrainDistance() {
@@ -1201,7 +1266,7 @@ function computeDrainDistance() {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
-      if (terrain[i] < seaLevel || (isEdge && terrain[i] < seaLevel)) {
+      if (isOceanCell[i] || (isEdge && isOceanCell[i])) {
         drainDist[i] = 0;
         queue.push(i);
       }
@@ -1244,8 +1309,8 @@ function computeHydraulicHead() {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
-      if (terrain[i] < seaLevel || (isEdge && water[i] > WATER_CONNECT_THRESH)) {
-        hydraulicHead[i] = terrain[i] < seaLevel ? seaLevel : terrain[i];
+      if (isOceanCell[i] || (isEdge && water[i] > WATER_CONNECT_THRESH)) {
+        hydraulicHead[i] = isOceanCell[i] ? seaLevel : terrain[i];
         queue.push(i);
       }
     }
@@ -1273,10 +1338,17 @@ function computeHydraulicHead() {
     }
   }
 
-  // Cells not reached by BFS (disconnected lakes): head = their water surface
+  // Cells not reached by BFS are disconnected from ocean.
+  // Their trapped pressure = water depth × gravity (force building up).
+  // Connected cells have zero trapped pressure (ocean relieves it).
   for (let i = 0; i < N; i++) {
     if (hydraulicHead[i] === Infinity) {
+      // Disconnected — pressure builds with water depth
       hydraulicHead[i] = terrain[i] + water[i];
+      trappedPressure[i] = water[i] * SIM_GRAVITY;
+    } else {
+      // Connected to ocean — pressure relieved
+      trappedPressure[i] = 0;
     }
   }
 }
@@ -1299,6 +1371,7 @@ function initSim(startWithWater) {
   terrain     = generateTerrain(currentSeed, genOctaves, genValley, genRoughness,
                                 genTerrainType, genSeaLevel, genMtnHeight, genForceOcean);
   origTerrain = terrain.slice();
+  computeOceanCells();
   computeDrainDistance();
   water       = new Float32Array(N);
   sediment    = new Float32Array(N);
@@ -1309,6 +1382,7 @@ function initSim(startWithWater) {
   fluxD = new Float32Array(N);
   saturation = new Float32Array(N);
   hydraulicHead = new Float32Array(N);
+  trappedPressure = new Float32Array(N);
 
   for (let i = 0; i < N; i++) hardness[i] = getHardness(i);
 
@@ -1319,14 +1393,14 @@ function initSim(startWithWater) {
   rainfallRate = startWithWater !== false ? genRainfall : 0;
 
   hasOcean = false;
-  for (let i = 0; i < N; i++) { if (terrain[i] < seaLevel) { hasOcean = true; break; } }
+  for (let i = 0; i < N; i++) { if (isOceanCell[i]) { hasOcean = true; break; } }
 
   // Water initialization
   sources = [];
   if (startWithWater !== false) {
-    // Pre-fill ocean cells
+    // Pre-fill ocean cells (only edge-connected, not inland depressions)
     for (let i = 0; i < N; i++) {
-      if (terrain[i] < seaLevel) {
+      if (isOceanCell[i]) {
         water[i] = Math.max(0, seaLevel - terrain[i]);
       }
     }
@@ -1354,7 +1428,7 @@ function initSim(startWithWater) {
       for (let y = 3; y < GH - 3; y++) {
         for (let x = 3; x < GW - 3; x++) {
           const i = y * GW + x;
-          if (terrain[i] < seaLevel || terrain[i] < MOUNTAIN_THRESHOLD * 0.8) continue;
+          if (isOceanCell[i] || terrain[i] < MOUNTAIN_THRESHOLD * 0.8) continue;
           if (initialFlowAccum[i] > 0.5) {
             bestAccum.push({ x, y, accum: initialFlowAccum[i] });
           }
@@ -1406,7 +1480,7 @@ function stepHydraulic() {
   // Rainfall: add water to all non-ocean cells
   if (rainfallRate > 0) {
     for (let i = 0; i < N; i++) {
-      if (!(terrain[i] < seaLevel)) water[i] += rainfallRate;
+      if (!isOceanCell[i]) water[i] += rainfallRate;
     }
   }
 
@@ -1437,7 +1511,10 @@ function stepHydraulic() {
       }
 
       if (bestN >= 0) {
-        const transfer = Math.min(water[i] * 0.45, Math.max(bestDrop, bestScore) * 0.5);
+        // Trapped water flows faster when it finds a path (pressure release)
+        const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
+        const urgency = 0.45 + Math.min(trapped * 0.5, 0.4); // up to 0.85 transfer rate
+        const transfer = Math.min(water[i] * urgency, Math.max(bestDrop, bestScore) * 0.5);
         water[i] -= transfer;
         water[bestN] += transfer;
       }
@@ -1529,9 +1606,8 @@ function stepHydraulic() {
       const net = (inR + inL + inD + inU - fluxL[i] - fluxR[i] - fluxU[i] - fluxD[i]) * dt;
       water[i] = Math.max(0, water[i] + net);
 
-      if (terrain[i] < seaLevel) {
+      if (isOceanCell[i]) {
         // Ocean = infinite sink. Snap to sea level immediately.
-        // Any river inflow is absorbed instantly — the ocean is a siphon.
         water[i] = Math.max(0, oLvl - terrain[i]);
       } else {
         // Minor evaporation — only thin films (< 0.003) evaporate noticeably.
@@ -1540,17 +1616,29 @@ function stepHydraulic() {
           water[i] *= (1 - SIM_EVAP * 2);
         }
 
-        // Soil absorption with saturation limit.
-        // Once soil is fully saturated (sat=1), no more absorption — water stays on surface.
-        // Saturation slowly recovers (dries out) when no water is present.
+        // Depth-aware soil absorption through geological layers.
+        // Water percolates through permeable layers until hitting impermeable rock.
+        // Each layer has different permeability based on its hardness.
         if (water[i] > 0 && saturation[i] < 1.0) {
-          const permeability = 1.0 / (hardness[i] || 1);
-          const absorbAmt = SIM_ABSORB * permeability * (1.0 - saturation[i]);
+          // How deep has erosion cut? Determines which layer is exposed
+          const erosionDepth = Math.max(0, origTerrain[i] - terrain[i]);
+
+          // Find the LEAST permeable layer between surface and current depth
+          // Water must pass through all layers above — blocked by the hardest one
+          let worstPermeability = 1.0; // start fully permeable
+          for (let l = 0; l < LAYERS.length; l++) {
+            if (LAYERS[l].depth <= erosionDepth) {
+              // This layer is exposed or above — water passes through it
+              const layerPerm = 1.0 / LAYERS[l].hardness;
+              if (layerPerm < worstPermeability) worstPermeability = layerPerm;
+            }
+          }
+
+          const absorbAmt = SIM_ABSORB * worstPermeability * (1.0 - saturation[i]);
           const absorbed = Math.min(water[i], absorbAmt);
           water[i] -= absorbed;
-          saturation[i] = Math.min(1.0, saturation[i] + absorbed * 20); // fills up fast
+          saturation[i] = Math.min(1.0, saturation[i] + absorbed * 20);
         } else if (water[i] <= 0 && saturation[i] > 0) {
-          // Dry out slowly when no water present
           saturation[i] = Math.max(0, saturation[i] - 0.001);
         }
 
@@ -1560,7 +1648,7 @@ function stepHydraulic() {
         // but since there's no neighbor to receive it, we just let it leave.
         // Ocean edges drain faster (infinite capacity).
         if (x === 0 || x === GW - 1 || y === 0 || y === GH - 1) {
-          if (terrain[i] < seaLevel) {
+          if (isOceanCell[i]) {
             // Ocean edge — siphon
             water[i] = Math.max(0, seaLevel - terrain[i]);
           }
@@ -1585,7 +1673,7 @@ function stepErosion() {
     for (let x = 1; x < GW - 1; x++) {
       const i = y * GW + x;
       if (water[i] < MIN_WATER) continue;
-      if (terrain[i] < seaLevel) continue; // don't erode ocean floor
+      if (isOceanCell[i]) continue; // don't erode ocean floor
 
       const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5;
       const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5;
@@ -1605,8 +1693,28 @@ function stepErosion() {
       const slope = Math.sqrt(dhdx * dhdx + dhdy * dhdy);
       const slopeFactor = 1.0 + slope * 15;
 
+      // Curvature factor: sharp bends = high turbulence = more erosion.
+      // Compare this cell's flow direction to the upstream neighbor's direction.
+      // Straight flow (dot≈1) → low erosion. Sharp turn (dot≈0) → high erosion.
+      const nvx = vx / speed, nvy = vy / speed; // normalized flow direction
+      // Upstream cell (opposite of flow direction)
+      const upX = x - Math.round(nvx), upY = y - Math.round(nvy);
+      let curvatureFactor = 1.0;
+      if (upX >= 1 && upX < GW-1 && upY >= 1 && upY < GH-1) {
+        const ui = upY * GW + upX;
+        const uvx = ((fluxR[ui-1]||0) - fluxL[ui] + fluxR[ui] - (fluxL[ui+1]||0)) * 0.5;
+        const uvy = ((fluxD[ui-GW]||0) - fluxU[ui] + fluxD[ui] - (fluxU[ui+GW]||0)) * 0.5;
+        const uSpd = Math.sqrt(uvx*uvx + uvy*uvy);
+        if (uSpd > 0.005) {
+          // Dot product of normalized directions: 1=straight, 0=90° turn, -1=reversal
+          const dot = (nvx * uvx + nvy * uvy) / uSpd;
+          // Invert: straight=1× erosion, 90° turn=3× erosion
+          curvatureFactor = 1.0 + (1.0 - Math.max(0, dot)) * 2.0;
+        }
+      }
+
       const pressureBoost = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
-      const erosionForce = speed * pressureBoost * slopeFactor;
+      const erosionForce = speed * pressureBoost * slopeFactor * curvatureFactor;
 
       const localH = getHardness(i);
       const Ks_eff = SIM_Ks * erodSlider / localH;
@@ -1614,17 +1722,18 @@ function stepErosion() {
 
       if (C_eq > sediment[i]) {
         const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.015);
-        // Split erosion: 30% vertical (bed), 70% lateral (banks)
-        const verticalDelta = delta * 0.3;
-        const lateralDelta = delta * 0.7;
+        // Split erosion: vertical (bed) vs lateral (banks)
+        const vertSplit = SIM_VERTICAL_EROSION ? 0.3 : 0;
+        const verticalDelta = delta * vertSplit;
+        const lateralDelta = delta * (1 - vertSplit);
 
         // Constrain vertical erosion: can't erode below the lowest downstream neighbor.
-        // This prevents holes — erosion always creates a smooth gradient from high to low.
         const lowestNeighbor = Math.min(
           terrain[i-1], terrain[i+1], terrain[i-GW], terrain[i+GW]
         );
-        const minAllowed = lowestNeighbor - 0.001; // tiny margin so water still flows toward it
-        const actualVertical = Math.min(verticalDelta, Math.max(0, terrain[i] - minAllowed));
+        const minAllowed = lowestNeighbor - 0.001;
+        const actualVertical = SIM_VERTICAL_EROSION ?
+          Math.min(verticalDelta, Math.max(0, terrain[i] - minAllowed)) : 0;
 
         terrain[i]  -= actualVertical;
         sediment[i] += actualVertical + lateralDelta; // sediment from both vertical + lateral
@@ -1701,23 +1810,27 @@ function stepErosion() {
 
   // ── Hydrostatic pressure erosion ──
   // Water pooling against a dry barrier erodes the barrier.
-  // This is how rivers break through ridges naturally — water pools behind
-  // a ridge, the weakest point erodes, water rushes through the gap.
+  // TRAPPED water (disconnected from ocean) has extra force — it's been
+  // accumulating with nowhere to go. The more trapped water, the harder
+  // it pushes against barriers. When it breaks through, it floods out.
   for (let y = 1; y < GH - 1; y++) {
     for (let x = 1; x < GW - 1; x++) {
       const i = y * GW + x;
-      if (water[i] < 0.005) continue; // need meaningful pool depth
+      if (water[i] < 0.005) continue;
 
-      // Check each neighbor: if it's dry and higher, water pushes against it
       for (const ni of [i-1, i+1, i-GW, i+GW]) {
-        if (water[ni] > 0.002) continue; // neighbor has water too — not a barrier
+        if (water[ni] > 0.002) continue; // not a barrier
         if (terrain[ni] <= terrain[i] + water[i]) continue; // not blocking
 
-        // Barrier found: erode it proportional to water depth behind it
-        const pressure = water[i] * SIM_GRAVITY;
+        // Base pressure from water depth
+        const basePressure = water[i] * SIM_GRAVITY;
+        // Trapped pressure bonus: disconnected water pushes harder
+        const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
+        const totalPressure = basePressure + trapped * 2.0;
+
         const barrierH = getHardness(ni);
-        const erodeAmt = SIM_Ks * erodSlider * pressure * 0.1 / barrierH;
-        terrain[ni] -= Math.min(erodeAmt, 0.003);
+        const erodeAmt = SIM_Ks * erodSlider * totalPressure * 0.1 / barrierH;
+        terrain[ni] -= Math.min(erodeAmt, 0.005);
       }
     }
   }
@@ -1732,7 +1845,7 @@ function detectOxbows() {
   const threshold = 0.005;
   const channelCells = new Set();
   for (let i = 0; i < GW * GH; i++) {
-    if (water[i] > threshold && !(terrain[i] < seaLevel)) channelCells.add(i);
+    if (water[i] > threshold && !isOceanCell[i]) channelCells.add(i);
   }
   if (prevChannelCells) {
     const lost = [];
@@ -1898,7 +2011,7 @@ function render(maxDepth) {
       const gy = Math.min(GH - 1, gyf | 0);
       const ci = gy * GW + gx;
       const h = sampleGrid(terrain, gxf, gyf);
-      const isOcean = (terrain[ci] < seaLevel);
+      const isOcean = isOceanCell ? isOceanCell[ci] : false;
       // Bilinear sample from pre-smoothed water → smooth per-pixel values, no dithering
       const w = Math.max(0, sampleGridFast(waterSmooth, gxf, gyf));
 
@@ -1958,10 +2071,17 @@ function render(maxDepth) {
           const pN = Math.min(1, w * SIM_GRAVITY * 1.5);
           wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
         } else if (showVelocity) {
-          // True velocity = flux / water_depth. Deep stagnant pools → low velocity.
-          const wd = Math.max(water[ci], 0.005); // avoid division by zero
-          const vx = ((fluxR[ci] || 0) - (fluxL[ci] || 0)) / wd;
-          const vy = ((fluxD[ci] || 0) - (fluxU[ci] || 0)) / wd;
+          // Detect pool interior: if this cell AND all 4 neighbors have water,
+          // it's an interior pool cell — show zero velocity.
+          // Only edge/channel cells with dry neighbors show velocity.
+          const poolThresh = 0.003;
+          const isPoolInterior = water[ci] > poolThresh &&
+            ci > 0 && ci < GW*GH-1 && ci >= GW && ci < GW*(GH-1) &&
+            water[ci-1] > poolThresh && water[ci+1] > poolThresh &&
+            water[ci-GW] > poolThresh && water[ci+GW] > poolThresh;
+          const wd = Math.max(water[ci], 0.005);
+          const vx = isPoolInterior ? 0 : ((fluxR[ci]||0) - (fluxL[ci]||0)) / wd;
+          const vy = isPoolInterior ? 0 : ((fluxD[ci]||0) - (fluxU[ci]||0)) / wd;
           const spd = Math.min(1, Math.sqrt(vx*vx + vy*vy) * 0.5);
           wr = lerp(20, 255, spd) | 0; wg = lerp(60, 255, spd) | 0; wb = lerp(180, 255, spd) | 0;
         } else {
@@ -2199,6 +2319,10 @@ function loop(ts) {
   // Recompute hydraulic head every frame (cheap BFS, critical for flow direction)
   computeHydraulicHead();
 
+  // Update stats regardless of view mode
+  document.getElementById('yr').textContent = Math.round(year).toLocaleString();
+  document.getElementById('max-depth').textContent = (maxDepth * 100).toFixed(1);
+
   if (viewMode === '3d') {
     render3D();
   } else {
@@ -2321,6 +2445,8 @@ function showGenModal() {
   document.getElementById('gen-mtn-height').value = Math.round(genMtnHeight * 100);
   document.getElementById('gen-sea-level').value = Math.round(genSeaLevel * 100);
   document.getElementById('gen-rainfall').value = Math.round(genRainfall / RAINFALL_MAX * 100);
+  document.getElementById('gen-plates').value = genNumPlates;
+  document.getElementById('gen-erosion-passes').value = genErosionPasses;
 
   // Set active terrain type button
   document.querySelectorAll('.gen-type-btn').forEach(b => {
@@ -2343,6 +2469,9 @@ function updateGenLabels() {
   document.getElementById('gen-mtn-height-val').textContent = document.getElementById('gen-mtn-height').value;
   document.getElementById('gen-sea-level-val').textContent = document.getElementById('gen-sea-level').value;
   document.getElementById('gen-rainfall-val').textContent = document.getElementById('gen-rainfall').value;
+  const pv = parseInt(document.getElementById('gen-plates').value);
+  document.getElementById('gen-plates-val').textContent = pv === 0 ? 'auto' : pv;
+  document.getElementById('gen-erosion-passes-val').textContent = document.getElementById('gen-erosion-passes').value;
 }
 
 function generateFromModal() {
@@ -2355,6 +2484,8 @@ function generateFromModal() {
   genSeaLevel    = parseInt(document.getElementById('gen-sea-level').value) / 100;
   genRainfall    = parseInt(document.getElementById('gen-rainfall').value) / 100 * RAINFALL_MAX;
   genTerrainType = document.querySelector('.gen-type-btn.active').dataset.type;
+  genNumPlates     = parseInt(document.getElementById('gen-plates').value) || 0;
+  genErosionPasses = parseFloat(document.getElementById('gen-erosion-passes').value);
   genForceOcean  = document.getElementById('gen-force-ocean').checked;
   const startWater = document.getElementById('gen-water').checked;
 
@@ -2366,7 +2497,7 @@ function generateFromModal() {
 }
 
 // Wire up modal sliders
-['gen-mapsize','gen-octaves','gen-valley','gen-roughness','gen-mtn-height','gen-sea-level','gen-rainfall'].forEach(id => {
+['gen-mapsize','gen-octaves','gen-valley','gen-roughness','gen-mtn-height','gen-sea-level','gen-plates','gen-erosion-passes','gen-rainfall'].forEach(id => {
   document.getElementById(id).addEventListener('input', updateGenLabels);
 });
 
