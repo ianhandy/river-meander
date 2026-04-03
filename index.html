@@ -13,10 +13,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     height: 100vh;
     overflow: hidden;
   }
-  canvas { display: block; cursor: crosshair; }
+  canvas { display: block; cursor: crosshair; border: 1px solid #21262d; }
   #ui {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -63,7 +64,9 @@
     line-height: 1.8;
     color: #6e7681;
     pointer-events: none;
+    transition: opacity .2s;
   }
+  #legend.hidden { opacity: 0; }
   .lrow { display: flex; align-items: center; gap: 6px; }
   .lswatch { width: 14px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   #hint {
@@ -72,17 +75,188 @@
     pointer-events: none;
     line-height: 1.7;
   }
+
+  /* Generation modal */
+  #gen-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .15s;
+  }
+  #gen-overlay.hidden { display: none; }
+  #gen-modal {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 20px 24px;
+    min-width: 340px;
+    position: relative;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  #gen-modal h3 {
+    font-size: 14px;
+    color: #e6edf3;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  #gen-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none;
+    color: #6e7681; font-size: 18px;
+    cursor: pointer; padding: 2px 6px;
+    line-height: 1;
+  }
+  #gen-close:hover { color: #c9d1d9; }
+  .gen-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+  .gen-row label {
+    font-size: 11px;
+    color: #8b949e;
+    min-width: 90px;
+  }
+  .gen-row input[type=range] { flex: 1; }
+  .gen-row .gen-val {
+    font-size: 11px;
+    color: #58a6ff;
+    min-width: 30px;
+    text-align: right;
+  }
+  .gen-row input[type=text] {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    width: 100px;
+  }
+  .gen-row input[type=text]:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+  .gen-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .gen-check input { accent-color: #58a6ff; }
+  .gen-check label { font-size: 11px; color: #8b949e; }
+  #gen-go {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    background: #1f6feb;
+    border: 1px solid #388bfd;
+    color: #fff;
+    font-weight: 600;
+    font-size: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #gen-go:hover { background: #388bfd; }
+  .gen-types {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  .gen-types button {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 10px;
+    text-align: center;
+  }
+  .gen-sep {
+    font-size: 9px;
+    color: #30363d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 10px 0 8px;
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 4px;
+  }
+
+  #c3d {
+    display: none;
+    border: 1px solid #21262d;
+    cursor: grab;
+  }
+  #c3d.active-3d { display: block; }
+  #c.hidden-2d { display: none; }
+
+  /* Dev panel */
+  #dev-toggle {
+    position: fixed; top: 12px; right: 14px;
+    z-index: 20;
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: rgba(13,17,23,0.7);
+    border: 1px solid #21262d;
+    color: #6e7681;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  #dev-toggle:hover { background: #21262d; color: #c9d1d9; }
+  #dev-panel {
+    position: fixed; top: 48px; right: 14px;
+    z-index: 20;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 12px 14px;
+    width: 240px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    font-size: 10px;
+    color: #8b949e;
+    transition: opacity .15s, transform .15s;
+  }
+  #dev-panel.hidden { opacity: 0; transform: translateX(10px); pointer-events: none; }
+  #dev-panel h4 {
+    font-size: 10px; color: #58a6ff; margin: 8px 0 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  #dev-panel h4:first-child { margin-top: 0; }
+  .dev-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+  }
+  .dev-row label { min-width: 75px; font-size: 9px; color: #6e7681; }
+  .dev-row input[type=range] { flex: 1; width: 60px; }
+  .dev-row .dev-val { min-width: 45px; text-align: right; font-size: 9px; color: #58a6ff; font-variant-numeric: tabular-nums; }
+  .dev-help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: rgba(88,166,255,0.15); color: #58a6ff;
+    font-size: 8px; font-weight: 700; cursor: help;
+    flex-shrink: 0; margin-left: 2px;
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="c3d"></canvas>
 
 <div id="ui">
   <div class="stat">Year <span id="yr">0</span></div>
+  <div class="stat" style="min-width:70px">Seed <span id="seed-display">0</span></div>
 
   <div class="group">
-    <button id="btn-play" class="active" onclick="togglePlay()">⏸ Pause</button>
-    <button onclick="initSim()">↺ Reset</button>
+    <button id="btn-play" class="active" onclick="togglePlay()">&#x23F8; Pause</button>
+    <button onclick="showGenModal()">&#x21BA; New</button>
   </div>
 
   <div class="group">
@@ -92,7 +266,7 @@
 
   <div class="group">
     <label>Erodibility</label>
-    <input type="range" id="erodibility" min="1" max="100" value="35">
+    <input type="range" id="erodibility" min="1" max="500" value="35">
   </div>
 
   <div class="group">
@@ -106,8 +280,23 @@
   </div>
 
   <div class="group">
+    <label>Water Opacity</label>
+    <input type="range" id="water-opacity" min="20" max="100" value="90">
+  </div>
+
+  <div class="group">
+    <label>View</label>
+    <button id="btn-view-terrain" class="active" onclick="setView('terrain')">Terrain</button>
+    <button id="btn-view-height" onclick="setView('height')">Height</button>
+    <button id="btn-view-exposed" onclick="setView('exposed')">Exposed</button>
+    <button id="btn-view-3d" onclick="setView('3d')">3D</button>
+  </div>
+
+  <div class="group">
+    <label>Contours</label>
+    <button id="btn-contours" class="active" onclick="toggleContours()">ON</button>
     <label>Layers</label>
-    <button id="btn-layers" class="active" onclick="toggleLayers()">ON</button>
+    <button id="btn-layers" onclick="toggleLayers()">OFF</button>
     <label>Pressure</label>
     <button id="btn-pressure" onclick="togglePressure()">OFF</button>
     <label>Velocity</label>
@@ -121,43 +310,270 @@
 </div>
 
 <div id="legend">
-  <div class="lrow"><div class="lswatch" style="background:#c8b89a"></div> Alluvium (soft)</div>
-  <div class="lrow"><div class="lswatch" style="background:#b07a50"></div> Clay / silt</div>
-  <div class="lrow"><div class="lswatch" style="background:#8a6040"></div> Sandstone</div>
-  <div class="lrow"><div class="lswatch" style="background:#607060"></div> Limestone</div>
-  <div class="lrow"><div class="lswatch" style="background:#485060"></div> Bedrock (hard)</div>
-  <div class="lrow"><div class="lswatch" style="background:rgba(40,100,200,0.8)"></div> Water</div>
+  <!-- Terrain view legend -->
+  <div id="legend-terrain">
+    <div class="lrow"><div class="lswatch" style="background:#2d2820"></div> Deep seabed</div>
+    <div class="lrow"><div class="lswatch" style="background:#5f553c"></div> Continental shelf</div>
+    <div class="lrow"><div class="lswatch" style="background:#a09670"></div> Coastal lowland</div>
+    <div class="lrow"><div class="lswatch" style="background:#7d9c52"></div> Plains</div>
+    <div class="lrow"><div class="lswatch" style="background:#946e3e"></div> Foothills</div>
+    <div class="lrow"><div class="lswatch" style="background:#8a8480"></div> Mountain rock</div>
+    <div class="lrow"><div class="lswatch" style="background:#d7d7dc"></div> Snow / peaks</div>
+  </div>
+  <!-- Height view legend -->
+  <div id="legend-height" style="display:none">
+    <div class="lrow"><div class="lswatch" style="background:#000"></div> Low elevation</div>
+    <div class="lrow"><div class="lswatch" style="background:#808080"></div> Mid elevation</div>
+    <div class="lrow"><div class="lswatch" style="background:#fff"></div> High elevation</div>
+    <div class="lrow"><div class="lswatch" style="background:#3070c0"></div> Water overlay</div>
+  </div>
+  <!-- Exposed view legend -->
+  <div id="legend-exposed" style="display:none">
+    <div class="lrow"><div class="lswatch" style="background:#b4a582"></div> Dry land</div>
+    <div class="lrow"><div class="lswatch" style="background:#3278c8"></div> Shallow water</div>
+    <div class="lrow"><div class="lswatch" style="background:#0f2882"></div> Deep water</div>
+  </div>
+  <!-- Layers legend (shown when Layers toggle is ON) -->
+  <div id="legend-layers" style="display:none">
+    <div class="lrow"><div class="lswatch" style="background:#c8b89a"></div> Alluvium (soft)</div>
+    <div class="lrow"><div class="lswatch" style="background:#b07a50"></div> Clay / silt</div>
+    <div class="lrow"><div class="lswatch" style="background:#8a6040"></div> Sandstone</div>
+    <div class="lrow"><div class="lswatch" style="background:#607060"></div> Limestone</div>
+    <div class="lrow"><div class="lswatch" style="background:#485060"></div> Bedrock (hard)</div>
+  </div>
 </div>
 
 <div id="hint">
-  Click — add water source<br>
-  Shift+click — add obstruction
+  Click — carve terrain<br>
+  Shift+click — add water source
+</div>
+
+<!-- Dev tools panel -->
+<button id="dev-toggle" onclick="document.getElementById('dev-panel').classList.toggle('hidden')">&#9881;</button>
+<div id="dev-panel" class="hidden">
+  <h4>Flow Physics</h4>
+  <div class="dev-row">
+    <label>Gravity <span class="dev-help" title="How fast water accelerates downhill. Higher = more aggressive flow.">?</span></label>
+    <input type="range" id="dev-gravity" min="1" max="50" step="1" value="10">
+    <span class="dev-val" id="dev-gravity-val">10.0</span>
+  </div>
+  <div class="dev-row">
+    <label>Timestep <span class="dev-help" title="Simulation time per step. Higher = faster but less stable.">?</span></label>
+    <input type="range" id="dev-dt" min="0.05" max="1.0" step="0.05" value="0.35">
+    <span class="dev-val" id="dev-dt-val">0.35</span>
+  </div>
+  <div class="dev-row">
+    <label>Spring Rate <span class="dev-help" title="How much water each mountain source produces per step.">?</span></label>
+    <input type="range" id="dev-spring" min="0.001" max="0.05" step="0.001" value="0.003">
+    <span class="dev-val" id="dev-spring-val">0.003</span>
+  </div>
+
+  <h4>Water Loss</h4>
+  <div class="dev-row">
+    <label>Evaporation <span class="dev-help" title="Surface water loss from thin films. Only affects water &lt; 0.003 depth. Rivers/lakes unaffected.">?</span></label>
+    <input type="range" id="dev-evap" min="0" max="0.005" step="0.0001" value="0.0005">
+    <span class="dev-val" id="dev-evap-val">0.0005</span>
+  </div>
+  <div class="dev-row">
+    <label>Absorption <span class="dev-help" title="Water soaking into ground. Scaled by ground permeability (soft alluvium absorbs more, bedrock resists). Only affects thin water.">?</span></label>
+    <input type="range" id="dev-absorb" min="0" max="0.01" step="0.0002" value="0.001">
+    <span class="dev-val" id="dev-absorb-val">0.0010</span>
+  </div>
+
+  <h4>Erosion</h4>
+  <div class="dev-row">
+    <label>Capacity <span class="dev-help" title="Sediment transport capacity (Kc). How much sediment water can carry. Higher = more erosion before deposition.">?</span></label>
+    <input type="range" id="dev-kc" min="0.01" max="0.5" step="0.01" value="0.18">
+    <span class="dev-val" id="dev-kc-val">0.18</span>
+  </div>
+  <div class="dev-row">
+    <label>Erosion <span class="dev-help" title="Base erosion rate (Ks). How fast terrain dissolves. Divided by local hardness. Like setting the material to sand vs granite.">?</span></label>
+    <input type="range" id="dev-ks" min="0.01" max="0.3" step="0.01" value="0.12">
+    <span class="dev-val" id="dev-ks-val">0.120</span>
+  </div>
+  <div class="dev-row">
+    <label>Deposition <span class="dev-help" title="Rate sediment settles back to terrain (Kd). Higher = more silt buildup in slow water. Can never raise terrain above its original height.">?</span></label>
+    <input type="range" id="dev-kd" min="0.001" max="0.05" step="0.001" value="0.015">
+    <span class="dev-val" id="dev-kd-val">0.015</span>
+  </div>
+  <div class="dev-row">
+    <label>Smoothing <span class="dev-help" title="Thermal erosion (Kt). Smooths steep slopes passively — simulates weathering and rockfall independent of water.">?</span></label>
+    <input type="range" id="dev-kt" min="0" max="0.03" step="0.001" value="0.008">
+    <span class="dev-val" id="dev-kt-val">0.008</span>
+  </div>
+
+  <h4>Tectonics</h4>
+  <div class="dev-row">
+    <label>Plate Speed <span class="dev-help" title="How fast tectonic plates drift. Higher = faster mountain building and rifting.">?</span></label>
+    <input type="range" id="dev-tspeed" min="0" max="1.0" step="0.01" value="0.15">
+    <span class="dev-val" id="dev-tspeed-val">0.15</span>
+  </div>
+  <div class="dev-row">
+    <label>Uplift Rate <span class="dev-help" title="How fast mountains grow at convergent (colliding) plate boundaries.">?</span></label>
+    <input type="range" id="dev-uplift" min="0" max="0.005" step="0.0001" value="0.0008">
+    <span class="dev-val" id="dev-uplift-val">0.0008</span>
+  </div>
+  <div class="dev-row">
+    <label>Rift Rate <span class="dev-help" title="How fast valleys form at divergent (spreading) plate boundaries.">?</span></label>
+    <input type="range" id="dev-rift" min="0" max="0.003" step="0.0001" value="0.0004">
+    <span class="dev-val" id="dev-rift-val">0.0004</span>
+  </div>
+  <div class="dev-row">
+    <label>Quake Thresh <span class="dev-help" title="Transform stress threshold before earthquake fires. Lower = more frequent quakes.">?</span></label>
+    <input type="range" id="dev-quake" min="0.5" max="5.0" step="0.1" value="2.0">
+    <span class="dev-val" id="dev-quake-val">2.0</span>
+  </div>
+  <div class="dev-row">
+    <label>Fault Erosion <span class="dev-help" title="Extra weathering/crumbling at fault zones, independent of water. Simulates rockfall and crushed rock.">?</span></label>
+    <input type="range" id="dev-ferode" min="0" max="0.05" step="0.001" value="0.01">
+    <span class="dev-val" id="dev-ferode-val">0.010</span>
+  </div>
+
+  <div class="dev-row" style="margin-top:4px">
+    <label>Fault Lines <span class="dev-help" title="Overlay showing plate boundaries. Red = convergent (mountains), blue = divergent (rifts), yellow = transform (quakes).">?</span></label>
+    <button id="btn-faults" onclick="showFaultLines=!showFaultLines; this.textContent=showFaultLines?'ON':'OFF'; this.classList.toggle('active',showFaultLines)">OFF</button>
+  </div>
+
+  <h4>3D View</h4>
+  <div class="dev-row">
+    <label>Height Scale <span class="dev-help" title="Vertical exaggeration of the 3D terrain. 0.2–0.3 is realistic, higher dramatizes relief.">?</span></label>
+    <input type="range" id="dev-hscale" min="0.05" max="1.0" step="0.05" value="0.25">
+    <span class="dev-val" id="dev-hscale-val">0.25</span>
+  </div>
+
+  <h4>Rendering</h4>
+  <div class="dev-row">
+    <label>Water Thresh <span class="dev-help" title="Minimum water depth to render. Below this, water is invisible. Hides thin moisture films.">?</span></label>
+    <input type="range" id="dev-wthresh" min="0.0001" max="0.02" step="0.0001" value="0.003">
+    <span class="dev-val" id="dev-wthresh-val">0.0030</span>
+  </div>
+  <div class="dev-row">
+    <label>Pressure Wt <span class="dev-help" title="How much water depth (pressure) contributes to erosion vs flow velocity. 0 = only velocity erodes. 1 = deep still water erodes too.">?</span></label>
+    <input type="range" id="dev-pw" min="0" max="1.0" step="0.05" value="0.4">
+    <span class="dev-val" id="dev-pw-val">0.40</span>
+  </div>
+</div>
+
+<!-- Generation modal -->
+<div id="gen-overlay" class="hidden">
+  <div id="gen-modal">
+    <button id="gen-close" onclick="hideGenModal()">&times;</button>
+    <h3>New Terrain</h3>
+
+    <div class="gen-row">
+      <label>Type</label>
+      <div class="gen-types">
+        <button class="gen-type-btn active" data-type="river_valley">Valley</button>
+        <button class="gen-type-btn" data-type="island">Island</button>
+        <button class="gen-type-btn" data-type="continent">Continent</button>
+        <button class="gen-type-btn" data-type="mountain_range">Mountains</button>
+      </div>
+    </div>
+
+    <div class="gen-row">
+      <label>Seed</label>
+      <input type="text" id="gen-seed" value="42">
+      <button onclick="document.getElementById('gen-seed').value=Math.floor(Math.random()*99999);updateGenLabels()" style="padding:3px 8px;font-size:10px">Random</button>
+    </div>
+
+    <div class="gen-row">
+      <label>Map Size</label>
+      <input type="range" id="gen-mapsize" min="100" max="350" step="50" value="200">
+      <span class="gen-val" id="gen-mapsize-val">200</span>
+    </div>
+
+    <div class="gen-sep">Terrain Shape</div>
+
+    <div class="gen-row">
+      <label>Smoothness</label>
+      <input type="range" id="gen-octaves" min="2" max="8" value="6">
+      <span class="gen-val" id="gen-octaves-val">6</span>
+    </div>
+
+    <div class="gen-row">
+      <label>Roughness</label>
+      <input type="range" id="gen-roughness" min="10" max="90" value="50">
+      <span class="gen-val" id="gen-roughness-val">50</span>
+    </div>
+
+    <div class="gen-row">
+      <label>Mountain Height</label>
+      <input type="range" id="gen-mtn-height" min="0" max="100" value="50">
+      <span class="gen-val" id="gen-mtn-height-val">50</span>
+    </div>
+
+    <div class="gen-row">
+      <label>Valley Depth</label>
+      <input type="range" id="gen-valley" min="0" max="100" value="55">
+      <span class="gen-val" id="gen-valley-val">55</span>
+    </div>
+
+    <div class="gen-row">
+      <label>Sea Level</label>
+      <input type="range" id="gen-sea-level" min="0" max="50" value="20">
+      <span class="gen-val" id="gen-sea-level-val">20</span>
+    </div>
+
+    <div class="gen-sep">Water</div>
+
+    <div class="gen-row">
+      <label>Rainfall</label>
+      <input type="range" id="gen-rainfall" min="0" max="100" value="0">
+      <span class="gen-val" id="gen-rainfall-val">0</span>
+    </div>
+
+    <div class="gen-check">
+      <input type="checkbox" id="gen-force-ocean" checked>
+      <label for="gen-force-ocean">Force ocean corner</label>
+    </div>
+
+    <div class="gen-check">
+      <input type="checkbox" id="gen-water" checked>
+      <label for="gen-water">Start with water sources</label>
+    </div>
+
+    <button id="gen-go" onclick="generateFromModal()">Generate</button>
+  </div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
-const CELL_PX   = 3;          // pixels per grid cell
-const UI_H      = 46;         // UI bar height
-const GRAVITY   = 6.0;        // hydraulic gravity constant (tuned)
-const EVAP      = 0.00015;    // evaporation rate
-const Kc        = 0.18;       // sediment capacity coefficient
-const Ks_base   = 0.008;      // base erosion rate
-const Kd        = 0.015;      // deposition rate
-const Kt        = 0.003;      // thermal erosion (slope softening)
-const MIN_WATER = 1e-4;       // water depth threshold
-const DT        = 0.35;       // hydraulic timestep per sub-step
-const YEARS_PER_STEP = 40;    // simulated years per physics step
+let SIM_SIZE    = 200;         // square grid size (configurable via modal)
+const UI_H      = 46;
+const MIN_WATER = 1e-4;
+const YEARS_PER_STEP = 200;
+const CONTOUR_INTERVAL = 0.04;
+const MAJOR_CONTOUR_EVERY = 5;
+const MOUNTAIN_THRESHOLD = 0.68;
+const RAINFALL_MAX = 0.000005;
+const MAX_SOURCES = 2;
 
-// Hardness layer thresholds (fraction of original elevation)
-// Surface ← soft alluvium; depth ← hard bedrock
+// Offscreen canvas for scaling render to screen
+const offCanvas = document.createElement('canvas');
+const offCtx = offCanvas.getContext('2d');
+
+// Tunable via dev panel
+let SIM_GRAVITY = 10.0;
+let SIM_EVAP = 0.0005;
+let SIM_ABSORB = 0.001;       // soil absorption — water soaks into ground
+let SIM_Kc = 0.18;
+let SIM_Ks = 0.12;
+let SIM_Kd = 0.015;
+let SIM_Kt = 0.008;
+let SIM_DT = 0.35;
+let SIM_SPRING_RATE = 0.003;
+let SIM_PRESSURE_WT = 0.4;
+let SIM_WATER_THRESH = 0.003;
+let SIM_HEIGHT_SCALE = 0.25;
+
 const LAYERS = [
-  { depth: 0.00, hardness: 1.0,  r:200, g:184, b:154 },  // alluvium
-  { depth: 0.04, hardness: 2.2,  r:176, g:122, b: 80 },  // clay
-  { depth: 0.10, hardness: 4.0,  r:138, g: 96, b: 64 },  // sandstone
-  { depth: 0.18, hardness: 7.5,  r: 96, g:112, b: 96 },  // limestone
-  { depth: 0.28, hardness: 14.0, r: 72, g: 80, b: 96 },  // bedrock
+  { depth: 0.00, hardness: 1.0,  r:200, g:184, b:154 },
+  { depth: 0.04, hardness: 1.8,  r:176, g:122, b: 80 },
+  { depth: 0.10, hardness: 2.8,  r:138, g: 96, b: 64 },
+  { depth: 0.18, hardness: 4.5,  r: 96, g:112, b: 96 },
+  { depth: 0.28, hardness: 7.0,  r: 72, g: 80, b: 96 },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -166,148 +582,717 @@ const LAYERS = [
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
-let GW, GH;                  // grid dimensions
-let terrain, origTerrain;    // Float32 elevation [0..1]
-let water;                   // Float32 water depth
-let sediment;                // Float32 suspended sediment
-let hardness;                // Float32 local hardness (dynamic)
-let fluxL, fluxR, fluxU, fluxD; // Float32 pipe flux arrays
-
-let sources  = [];           // [{gx, gy, rate}] continuous water inputs
-let oxbows   = [];           // [{pts:[{x,y}], age}]
+let GW, GH;
+let terrain, origTerrain;
+let drainDist;      // distance to nearest ocean/drain cell — shortest path routing
+let saturation;     // soil saturation per cell
+let hydraulicHead;  // pressure field — propagated from ocean along connected water
+let initialFlowAccum; // flow accumulation from terrain generation — where rivers naturally form
+let water, sediment, hardness, hardnessNoise;
+let fluxL, fluxR, fluxU, fluxD;
+let hasOcean = false;
+let sources  = [];
+let oxbows   = [];
 let year     = 0;
 let running  = true;
-let showLayers   = true;
+let showLayers   = false;
+let showContours = true;
 let showPressure = false;
 let showVelocity = false;
+let currentSeed  = 42;
+let viewMode     = 'terrain';
 
-let imgTerrain, imgWater;    // ImageData buffers
+// Camera (zoom/pan)
+let camX = 0, camY = 0;  // pan offset in grid coords (0,0 = top-left)
+let camZoom = 1.0;        // 1.0 = fit whole grid in canvas
+
+// Generation params
+let genOctaves     = 6;
+let genValley      = 0.55;
+let genRoughness   = 0.50;
+let genTerrainType = 'river_valley';
+let genSeaLevel    = 0.20;
+let genMtnHeight   = 0.50;
+let genRainfall    = 0;
+let genMapSize     = 200;
+let genForceOcean  = true;
+let rainfallRate   = 0;
+let seaLevel       = 0.20;
+
+let imgFull;
+
+// Tectonic state (persisted for live plate movement)
+let plates = [];
+let tectonicStress = null;   // Float32Array — current stress field
+let faultStress = null;      // Float32Array — accumulated transform stress (for earthquakes)
+let stepsSinceTectonics = 0;
+const TECTONIC_INTERVAL = 20; // run tectonics every N sim steps
+
+// Tunable tectonic params
+let SIM_TECTONIC_SPEED = 0.15;  // plate movement speed multiplier
+let SIM_UPLIFT_RATE = 0.0008;   // mountain building rate at convergent boundaries
+let SIM_RIFT_RATE = 0.0004;     // valley formation rate at divergent boundaries
+let SIM_QUAKE_THRESHOLD = 2.0;  // transform stress threshold for earthquake
+let SIM_FAULT_EROSION = 0.01;   // extra erosion rate at fault zones
+let showFaultLines = false;     // debug overlay for tectonic boundaries
 
 // ═══════════════════════════════════════════════════════════════════
-// VALUE NOISE  (multi-octave, no external deps)
+// SIMPLEX NOISE 2D
 // ═══════════════════════════════════════════════════════════════════
-function makeNoise(seed) {
-  let s = seed || 12345;
-  return function lcg() {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    return (s >>> 0) / 0xffffffff;
-  };
+const F2 = 0.5 * (Math.sqrt(3) - 1);
+const G2 = (3 - Math.sqrt(3)) / 6;
+const grad2 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+const perm = new Uint8Array(512);
+
+function seedNoise(seed) {
+  const p = new Uint8Array(256);
+  let s = seed | 0;
+  for (let i = 0; i < 256; i++) {
+    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+    p[i] = (s >>> 24) & 255;
+  }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
 }
 
-function buildNoiseGrid(w, h, rng) {
-  const a = new Float32Array(w * h);
-  for (let i = 0; i < a.length; i++) a[i] = rng();
-  return a;
+function simplex2D(x, y) {
+  const s = (x + y) * F2;
+  const i = Math.floor(x + s), j = Math.floor(y + s);
+  const t = (i + j) * G2;
+  const x0 = x - (i - t), y0 = y - (j - t);
+  const i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
+  const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+  const x2 = x0 - 1 + 2*G2, y2 = y0 - 1 + 2*G2;
+  const ii = i & 255, jj = j & 255;
+  const gi0 = perm[ii + perm[jj]] & 7;
+  const gi1 = perm[ii + i1 + perm[jj + j1]] & 7;
+  const gi2 = perm[ii + 1 + perm[jj + 1]] & 7;
+  let n0=0, n1=0, n2=0;
+  let t0 = 0.5 - x0*x0 - y0*y0;
+  if (t0 > 0) { t0 *= t0; n0 = t0*t0 * (grad2[gi0][0]*x0 + grad2[gi0][1]*y0); }
+  let t1 = 0.5 - x1*x1 - y1*y1;
+  if (t1 > 0) { t1 *= t1; n1 = t1*t1 * (grad2[gi1][0]*x1 + grad2[gi1][1]*y1); }
+  let t2 = 0.5 - x2*x2 - y2*y2;
+  if (t2 > 0) { t2 *= t2; n2 = t2*t2 * (grad2[gi2][0]*x2 + grad2[gi2][1]*y2); }
+  return 70 * (n0 + n1 + n2);
 }
 
-function sampleNoise(ng, nw, nh, fx, fy) {
-  // bilinear interpolation
-  fx = ((fx % 1) + 1) % 1;
-  fy = ((fy % 1) + 1) % 1;
-  const ix = Math.floor(fx * (nw - 1));
-  const iy = Math.floor(fy * (nh - 1));
-  const tx = fx * (nw - 1) - ix;
-  const ty = fy * (nh - 1) - iy;
-  const ix2 = Math.min(ix + 1, nw - 1);
-  const iy2 = Math.min(iy + 1, nh - 1);
-  const v00 = ng[iy  * nw + ix];
-  const v10 = ng[iy  * nw + ix2];
-  const v01 = ng[iy2 * nw + ix];
-  const v11 = ng[iy2 * nw + ix2];
-  const tx2 = tx * tx * (3 - 2 * tx); // smoothstep
-  const ty2 = ty * ty * (3 - 2 * ty);
-  return v00 + (v10 - v00) * tx2 + (v01 - v00) * ty2 + (v11 - v10 - v01 + v00) * tx2 * ty2;
-}
-
-function fbm(ngs, nlens, x, y, octaves) {
-  let v = 0, amp = 0.5, freq = 1, max = 0;
-  for (let o = 0; o < octaves; o++) {
-    const ng = ngs[o], nl = nlens[o];
-    v += sampleNoise(ng, nl, nl, x * freq, y * freq) * amp;
+function fbmSimplex(x, y, octaves, lacunarity, gain) {
+  let sum = 0, amp = 1, freq = 1, max = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * simplex2D(x * freq, y * freq);
     max += amp;
-    amp *= 0.5; freq *= 2.1;
+    amp *= gain;
+    freq *= lacunarity;
   }
-  return v / max;
+  return sum / max;
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// TERRAIN GENERATION
+// ADDITIONAL NOISE HELPERS
 // ═══════════════════════════════════════════════════════════════════
-function generateTerrain() {
-  const rng = makeNoise(Date.now() & 0xffff);
-  const octaves = 6;
-  const ngs = [], nlens = [];
-  for (let o = 0; o < octaves; o++) {
-    const nl = 4 + o * 3;
-    ngs.push(buildNoiseGrid(nl, nl, rng));
-    nlens.push(nl);
+function smoothstep(e0, e1, x) {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+function ridgedNoise(x, y, octaves, lacunarity, gain) {
+  let sum = 0, amp = 1, freq = 1, max = 0, prev = 1;
+  for (let i = 0; i < octaves; i++) {
+    let n = 1 - Math.abs(simplex2D(x * freq, y * freq));
+    n = n * n * prev;
+    prev = n;
+    sum += n * amp;
+    max += amp;
+    amp *= gain;
+    freq *= lacunarity;
+  }
+  return sum / max;
+}
+
+function warpedRidged(x, y, octaves, lac, gain, warpAmt) {
+  const wx = simplex2D(x + 5.2, y + 1.3) * warpAmt;
+  const wy = simplex2D(x + 9.7, y + 6.1) * warpAmt;
+  return ridgedNoise(x + wx, y + wy, octaves, lac, gain);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PLATE TECTONICS TERRAIN GENERATION
+//
+// Plates create a STRESS FIELD that modulates noise — not direct elevation.
+// The plate geometry is invisible in the final terrain. What you see is
+// noise-based terrain that's been warped, amplified, and shaped by the
+// tectonic stress underneath.
+// ═══════════════════════════════════════════════════════════════════
+
+function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl, mtnHeight, forceOcean) {
+  seedNoise(seed);
+
+  const N = GW * GH;
+  const t = new Float32Array(N);
+  const hn = new Float32Array(N);
+  // (ocean is determined dynamically by terrain[i] < seaLevel — no mask needed)
+  const gain = 0.35 + roughness * 0.3;
+
+  // ── Step 1: Generate plate stress field ──
+  // Plates are invisible scaffolding — they produce a smooth stress field
+  // that controls WHERE mountains form, not sharp geometric boundaries.
+
+  let numPlates, hasContinentalMask;
+  if (type === 'island') { numPlates = 7; hasContinentalMask = true; }
+  else if (type === 'continent') { numPlates = 9; hasContinentalMask = true; }
+  else if (type === 'mountain_range') { numPlates = 11; hasContinentalMask = false; }
+  else { numPlates = 5; hasContinentalMask = false; } // valley
+
+  // Plate seed points (scattered using noise for deterministic placement)
+  // Saved to global state for live tectonic movement
+  plates = [];
+  for (let p = 0; p < numPlates; p++) {
+    const px = (simplex2D(p * 7.3 + seed * 0.1, 0.5) * 0.5 + 0.5) * GW;
+    const py = (simplex2D(0.5, p * 7.3 + seed * 0.1) * 0.5 + 0.5) * GH;
+    const angle = simplex2D(p * 3.7 + 100, seed * 0.3) * Math.PI * 2;
+    const speed = 0.5 + Math.abs(simplex2D(p * 5.1, seed * 0.2 + 50)) * 1.5;
+    plates.push({ px, py, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed });
   }
 
-  const t = new Float32Array(GW * GH);
-  const aspect = GW / GH;
+  // Build stress field: for each cell, find the two nearest plates.
+  // The stress at a point depends on the relative velocity of the two
+  // closest plates and how close the point is to their shared boundary.
+  tectonicStress = new Float32Array(N);
+  faultStress = new Float32Array(N);
+  const stress = tectonicStress;   // alias for use in generation
 
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
-      const fx = x / GW;
-      const fy = y / GH;
+      const i = y * GW + x;
+      const fx = x / GW, fy = y / GH;
 
-      // Base elevation
-      let h = fbm(ngs, nlens, fx * aspect, fy, octaves);
+      // Noise-warped coordinates for irregular plate boundaries
+      const warpX = x + simplex2D(fx * 5 + 300, fy * 5 + 300) * 12;
+      const warpY = y + simplex2D(fx * 5 + 400, fy * 5 + 400) * 12;
 
-      // Tilt: higher on left (upstream), lower on right (outlet)
-      h += (1 - fx) * 0.35;
+      // Find 2 nearest plates
+      let d1 = Infinity, d2 = Infinity, p1 = 0, p2 = 0;
+      for (let p = 0; p < numPlates; p++) {
+        const dx = warpX - plates[p].px, dy = warpY - plates[p].py;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < d1) { d2 = d1; p2 = p1; d1 = d; p1 = p; }
+        else if (d < d2) { d2 = d; p2 = p; }
+      }
 
-      // Valley bias: depression along horizontal midline → encourages central channel
-      const dy = (fy - 0.5);
-      h -= Math.exp(-dy * dy * 14) * 0.18;
+      const boundaryDist = Math.abs(d1 - d2);
+      const boundaryProx = Math.exp(-boundaryDist * boundaryDist / 400);
 
-      // Clamp and normalize
-      t[y * GW + x] = Math.max(0, Math.min(1, h));
+      // Relative velocity between the two plates
+      const relVx = plates[p1].vx - plates[p2].vx;
+      const relVy = plates[p1].vy - plates[p2].vy;
+      // Normal from p1 toward p2
+      const nx = plates[p2].px - plates[p1].px;
+      const ny = plates[p2].py - plates[p1].py;
+      const nl = Math.sqrt(nx * nx + ny * ny) || 1;
+      // Convergence: positive = plates moving toward each other
+      const convergence = (relVx * nx / nl + relVy * ny / nl);
+
+      stress[i] = convergence * boundaryProx;
     }
   }
 
-  // Normalize to [0.15, 0.95]
-  let mn = 1, mx = 0;
-  for (let i = 0; i < t.length; i++) { mn = Math.min(mn, t[i]); mx = Math.max(mx, t[i]); }
-  const range = mx - mn;
-  for (let i = 0; i < t.length; i++) t[i] = 0.15 + (t[i] - mn) / range * 0.80;
+  // Smooth the stress field heavily — removes any remaining geometric artifacts
+  for (let pass = 0; pass < 20; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        stress[i] = stress[i] * 0.5 +
+          (stress[i-1] + stress[i+1] + stress[i-GW] + stress[i+GW]) * 0.125;
+      }
+    }
+  }
 
+  // ── Step 2: Build heightmap from noise modulated by stress ──
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const fx = x / GW, fy = y / GH;
+      const i = y * GW + x;
+
+      // Continental mask (island/continent: ocean at edges)
+      // Multi-octave coastline noise creates bays, harbors, inlets, peninsulas
+      let continentalH = 1.0;
+      if (hasContinentalMask) {
+        // Coastline noise: low freq for large bays + high freq for jagged inlets
+        const coastLo = fbmSimplex(fx * 3 + 50, fy * 3 + 50, 3, 2.0, 0.5) * 0.25;
+        const coastHi = fbmSimplex(fx * 8 + 150, fy * 8 + 150, 4, 2.0, 0.45) * 0.12;
+        const coastNoise = coastLo + coastHi;
+
+        if (type === 'island') {
+          const cx = (fx - 0.5) * 2, cy = (fy - 0.5) * 2;
+          const dist = Math.sqrt(cx * cx + cy * cy);
+          // Tighter island — more ocean visible, dist threshold lower
+          continentalH = smoothstep(0.9, 0.2, dist + coastNoise);
+        } else { // continent
+          // Wider ocean margins — land starts further from edges
+          const edgeX = smoothstep(0, 0.22, fx) * smoothstep(0, 0.22, 1 - fx);
+          const edgeY = smoothstep(0, 0.18, fy) * smoothstep(0, 0.18, 1 - fy);
+          continentalH = Math.max(0, Math.min(1, edgeX * edgeY + coastNoise));
+        }
+      }
+
+      // Base terrain: rolling hills and valleys — NOT flat
+      // Multiple noise layers at different scales create natural variation
+      const baseNoise = fbmSimplex(fx * 4, fy * 4, octaves, 2.0, gain);
+      const midNoise = fbmSimplex(fx * 2.5 + 40, fy * 2.5 + 40, 3, 2.0, 0.45);
+      const base = 0.35 + baseNoise * 0.2 + midNoise * 0.1;
+
+      // Stress modulation
+      const s = stress[i];
+      let tectonicH = 0;
+      if (s > 0) {
+        const ridge = warpedRidged(fx * 5, fy * 5, 4, 2.0, 0.5, 0.5);
+        tectonicH = ridge * s * mtnHeight * 1.2;
+      } else {
+        tectonicH = s * 0.15;
+      }
+
+      // Detail noise — more amplitude for natural roughness
+      const detail = fbmSimplex(fx * 8 + 30, fy * 8 + 30, Math.max(2, octaves - 1), 2.0, gain) * 0.1;
+
+      // Ocean floor (where continental mask is low)
+      const oceanFloor = 0.08 + fbmSimplex(fx * 3 + 200, fy * 3 + 200, 3, 2.0, 0.4) * 0.04;
+
+      // Compose
+      let h;
+      if (continentalH < 0.2) {
+        h = oceanFloor;
+      } else if (continentalH < 0.45) {
+        // Coastal transition: smooth blend from ocean to land
+        const ct = (continentalH - 0.2) / 0.25;
+        h = lerp(oceanFloor, base, ct * ct); // quadratic for natural shelf
+      } else {
+        // Inland elevation boost: farther from coast = higher base elevation
+        // Creates natural drainage toward the ocean
+        let inlandness;
+        if (hasContinentalMask) {
+          inlandness = smoothstep(0.45, 0.9, continentalH);
+        } else {
+          // No ocean mask — use distance from nearest edge
+          inlandness = Math.min(fx, 1-fx, fy, 1-fy) * 4; // 0 at edge, ~1 at center
+          inlandness = Math.min(1, inlandness);
+        }
+        const inlandBoost = inlandness * 0.18;
+        h = base + tectonicH + detail + inlandBoost;
+      }
+
+      // Valley mode additions
+      if (type === 'river_valley') {
+        h += (1 - fx) * 0.25;
+        if (valleyDepthFrac > 0) {
+          const vc = 0.5 + simplex2D(fx * 2.5 + 10, 0.5) * 0.18
+                         + simplex2D(fx * 5 + 20, 0.5) * 0.06;
+          const dfc = Math.abs(fy - vc);
+          const vw = 0.16 + simplex2D(fx * 3 + 30, fy * 0.3) * 0.05;
+          h -= Math.max(0, 1 - (dfc / vw) ** 2) * valleyDepthFrac * 0.25;
+        }
+      }
+
+      t[i] = Math.max(0, Math.min(1, h));
+      hn[i] = fbmSimplex(fx * 12 + 100, fy * 12 + 100, 4, 2.0, 0.5) * 0.5 + 0.5;
+    }
+  }
+
+  // Normalize to [0.03, 0.97]
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < N; i++) { if (t[i] < mn) mn = t[i]; if (t[i] > mx) mx = t[i]; }
+  const range = mx - mn || 1;
+  for (let i = 0; i < N; i++) t[i] = 0.03 + (t[i] - mn) / range * 0.94;
+
+  // ── Step 2b: Force ocean in at least one corner ──
+  if (forceOcean) {
+    // Find which corner has the lowest average terrain (most natural ocean location)
+    const corners = [
+      { cx: 0, cy: 0 },           // top-left
+      { cx: GW-1, cy: 0 },        // top-right
+      { cx: 0, cy: GH-1 },        // bottom-left
+      { cx: GW-1, cy: GH-1 },     // bottom-right
+    ];
+    const quadSize = Math.floor(Math.min(GW, GH) * 0.4);
+    let bestCorner = 0, bestAvg = Infinity;
+    for (let c = 0; c < 4; c++) {
+      let sum = 0, count = 0;
+      const sx = corners[c].cx === 0 ? 0 : GW - quadSize;
+      const sy = corners[c].cy === 0 ? 0 : GH - quadSize;
+      for (let y = sy; y < sy + quadSize && y < GH; y++) {
+        for (let x = sx; x < sx + quadSize && x < GW; x++) {
+          sum += t[y * GW + x]; count++;
+        }
+      }
+      if (sum / count < bestAvg) { bestAvg = sum / count; bestCorner = c; }
+    }
+
+    // Depress the corner AND its two adjacent edges
+    // Ocean extends along both sides the corner touches
+    const ocx = corners[bestCorner].cx, ocy = corners[bestCorner].cy;
+    for (let y = 0; y < GH; y++) {
+      for (let x = 0; x < GW; x++) {
+        const fx = x / GW, fy = y / GH;
+
+        // Distance from the corner point
+        const dx = (x - ocx) / GW, dy = (y - ocy) / GH;
+        const cornerDist = Math.sqrt(dx * dx + dy * dy);
+        // Strong depression near corner, reaches ~60% of map
+        const cornerDepth = Math.max(0, 1 - cornerDist / 0.7);
+
+        // Distance from the two edges this corner touches
+        const edgeDistX = ocx === 0 ? fx : (1 - fx);           // dist from the corner's X edge
+        const edgeDistY = ocy === 0 ? fy : (1 - fy);           // dist from the corner's Y edge
+        // Depression along each edge — fades ~35% into the map
+        const edgeDepthX = Math.max(0, 1 - edgeDistY / 0.35) * Math.max(0, 1 - edgeDistX / 0.8);
+        const edgeDepthY = Math.max(0, 1 - edgeDistX / 0.35) * Math.max(0, 1 - edgeDistY / 0.8);
+
+        // Combine: take the strongest depression from corner or either edge
+        const depression = Math.max(cornerDepth * cornerDepth, edgeDepthX, edgeDepthY);
+        t[y * GW + x] -= depression * 0.4;
+        t[y * GW + x] = Math.max(0.01, t[y * GW + x]);
+      }
+    }
+
+    // Re-normalize after depression
+    mn = Infinity; mx = -Infinity;
+    for (let i = 0; i < N; i++) { if (t[i] < mn) mn = t[i]; if (t[i] > mx) mx = t[i]; }
+    const range2 = mx - mn || 1;
+    for (let i = 0; i < N; i++) t[i] = 0.03 + (t[i] - mn) / range2 * 0.94;
+  }
+
+  // ── Step 3a: Smooth micro-depressions (eliminates pockmark puddles) ──
+  // Light general smoothing to fill tiny noise pits without destroying features
+  for (let pass = 0; pass < 3; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        const avg = (t[i-1] + t[i+1] + t[i-GW] + t[i+GW]) * 0.25;
+        // Only raise pits (don't flatten peaks) — fills depressions, preserves ridges
+        if (avg > t[i]) t[i] += (avg - t[i]) * 0.5;
+      }
+    }
+  }
+
+  // ── Step 3b: Thermal erosion (smooth unrealistic cliffs) ──
+  for (let pass = 0; pass < 8; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        const avg = (t[i-1] + t[i+1] + t[i-GW] + t[i+GW]) * 0.25;
+        const diff = avg - t[i];
+        if (Math.abs(diff) > 0.015) t[i] += diff * 0.35;
+      }
+    }
+  }
+
+  // ── Step 4: Particle-based hydraulic erosion pre-pass ──
+  // Simulates millions of years of rainfall erosion in seconds.
+  // Drops thousands of water particles from random positions, each one flows
+  // downhill eroding terrain along its path. This carves dendritic drainage
+  // networks — connected channel systems where every point has a clear path
+  // to the ocean. Without this, the terrain is raw noise full of random pits.
+  const NUM_PARTICLES = GW * GH * 3;  // 3 particles per cell on average
+  const P_INERTIA = 0.3;    // how much particle keeps its direction vs following gradient
+  const P_CAPACITY = 8.0;   // sediment carrying capacity multiplier
+  const P_DEPOSITION = 0.02;
+  const P_EROSION = 0.03;
+  const P_EVAP = 0.01;
+  const P_GRAVITY = 10;
+  const P_MIN_SLOPE = 0.001;
+  const P_RADIUS = 2;       // erosion brush radius
+
+  // Track flow accumulation: how many particles flow through each cell
+  const flowAccum = new Float32Array(N);
+
+  for (let particle = 0; particle < NUM_PARTICLES; particle++) {
+    // Random starting position
+    let px = Math.random() * (GW - 2) + 1;
+    let py = Math.random() * (GH - 2) + 1;
+    let dirX = 0, dirY = 0;
+    let pSpeed = 0;
+    let pWater = 1.0;
+    let pSediment = 0;
+
+    for (let step = 0; step < 80; step++) {
+      const ix = px | 0, iy = py | 0;
+      if (ix < 1 || ix >= GW - 1 || iy < 1 || iy >= GH - 1) break;
+      const ci = iy * GW + ix;
+
+      // Compute gradient (bilinear interpolated)
+      const fx = px - ix, fy = py - iy;
+      const h00 = t[ci], h10 = t[ci + 1], h01 = t[ci + GW], h11 = t[ci + GW + 1];
+      const gradX = (h10 - h00) * (1 - fy) + (h11 - h01) * fy;
+      const gradY = (h01 - h00) * (1 - fx) + (h11 - h10) * fx;
+
+      // Update direction (blend between inertia and gradient)
+      dirX = dirX * P_INERTIA - gradX * (1 - P_INERTIA);
+      dirY = dirY * P_INERTIA - gradY * (1 - P_INERTIA);
+      const dl = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (dl < 0.0001) break;
+      dirX /= dl; dirY /= dl;
+
+      // Move particle
+      const newX = px + dirX, newY = py + dirY;
+      if (newX < 1 || newX >= GW - 1 || newY < 1 || newY >= GH - 1) break;
+
+      // Height difference
+      const ni = (newY | 0) * GW + (newX | 0);
+      const newH = t[ni];
+      const oldH = h00 * (1-fx) * (1-fy) + h10 * fx * (1-fy) + h01 * (1-fx) * fy + h11 * fx * fy;
+      const hDiff = newH - oldH;
+
+      // Sediment capacity
+      const slope = Math.max(-hDiff, P_MIN_SLOPE);
+      const capacity = Math.max(slope, P_MIN_SLOPE) * pSpeed * pWater * P_CAPACITY;
+
+      if (pSediment > capacity || hDiff > 0) {
+        // Deposit: too much sediment or going uphill
+        const deposit = (hDiff > 0)
+          ? Math.min(pSediment, hDiff) // fill the hole
+          : (pSediment - capacity) * P_DEPOSITION;
+        pSediment -= deposit;
+        // Deposit in brush radius
+        t[ci] += deposit * 0.5;
+        if (ci + 1 < N) t[ci + 1] += deposit * 0.125;
+        if (ci - 1 >= 0) t[ci - 1] += deposit * 0.125;
+        if (ci + GW < N) t[ci + GW] += deposit * 0.125;
+        if (ci - GW >= 0) t[ci - GW] += deposit * 0.125;
+      } else {
+        // Erode
+        const erodeAmt = Math.min((capacity - pSediment) * P_EROSION, -hDiff * 0.5);
+        // Erode in brush radius for smooth channels
+        for (let ey = -P_RADIUS; ey <= P_RADIUS; ey++) {
+          for (let ex = -P_RADIUS; ex <= P_RADIUS; ex++) {
+            const eix = ix + ex, eiy = iy + ey;
+            if (eix < 0 || eix >= GW || eiy < 0 || eiy >= GH) continue;
+            const dist = Math.sqrt(ex * ex + ey * ey);
+            if (dist > P_RADIUS) continue;
+            const weight = 1 - dist / (P_RADIUS + 0.5);
+            t[eiy * GW + eix] -= erodeAmt * weight * 0.15;
+          }
+        }
+        pSediment += erodeAmt;
+      }
+
+      // Update speed and position
+      pSpeed = Math.sqrt(Math.max(0, pSpeed * pSpeed + hDiff * P_GRAVITY));
+      pWater *= (1 - P_EVAP);
+      px = newX;
+      py = newY;
+
+      // Accumulate flow at this cell
+      const fci = (py | 0) * GW + (px | 0);
+      if (fci >= 0 && fci < N) flowAccum[fci] += pWater;
+
+      if (pWater < 0.01) break;
+    }
+  }
+
+  // Final smoothing pass to clean up erosion artifacts
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        const avg = (t[i-1] + t[i+1] + t[i-GW] + t[i+GW]) * 0.25;
+        t[i] += (avg - t[i]) * 0.2;
+      }
+    }
+  }
+
+  // Re-normalize after erosion
+  let mn2 = Infinity, mx2 = -Infinity;
+  for (let i = 0; i < N; i++) { if (t[i] < mn2) mn2 = t[i]; if (t[i] > mx2) mx2 = t[i]; }
+  const range2 = mx2 - mn2 || 1;
+  for (let i = 0; i < N; i++) t[i] = 0.03 + (t[i] - mn2) / range2 * 0.94;
+
+  hardnessNoise = hn;
+  initialFlowAccum = flowAccum;
   return t;
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// HARDNESS  (function of original elevation + depth of cut)
-// ═══════════════════════════════════════════════════════════════════
-function getHardness(i) {
-  // How deep has this cell been eroded below its original surface?
-  const depthFraction = Math.max(0, origTerrain[i] - terrain[i]);
-  // Find which layer we're in
-  for (let l = LAYERS.length - 1; l >= 0; l--) {
-    if (depthFraction >= LAYERS[l].depth) {
-      return LAYERS[l].hardness;
+// Planchon-Darboux depression filling — ensures all cells can drain to boundary
+function fillDepressions(t, GW, GH) {
+  const N = GW * GH;
+  const EPS = 0.0001;
+  const filled = new Float32Array(N);
+
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      if (x === 0 || x === GW-1 || y === 0 || y === GH-1) {
+        filled[i] = t[i];
+      } else {
+        filled[i] = 1.0;
+      }
     }
   }
-  return LAYERS[0].hardness;
+
+  let changed = true, iter = 0;
+  while (changed && iter < 200) {
+    changed = false;
+    iter++;
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        if (filled[i] <= t[i]) continue;
+        for (const ni of [i-1, i+1, i-GW, i+GW]) {
+          const newH = Math.max(t[i], filled[ni] + EPS);
+          if (newH < filled[i]) {
+            filled[i] = newH;
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < N; i++) {
+    if (filled[i] > t[i]) t[i] = filled[i];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HARDNESS
+// ═══════════════════════════════════════════════════════════════════
+function getHardness(i) {
+  const depthFraction = Math.max(0, origTerrain[i] - terrain[i]);
+  const hardDepthScale = document.getElementById('hardness-depth').value / 100;
+  let baseHardness = LAYERS[0].hardness;
+  for (let l = LAYERS.length - 1; l >= 0; l--) {
+    if (depthFraction >= LAYERS[l].depth * hardDepthScale * 1.5) {
+      baseHardness = LAYERS[l].hardness;
+      break;
+    }
+  }
+  const noiseVal = hardnessNoise ? hardnessNoise[i] : 0.5;
+  return baseHardness * (0.6 + noiseVal * 0.8);
 }
 
 function layerColor(i) {
   const depthFraction = Math.max(0, origTerrain[i] - terrain[i]);
+  const hardDepthScale = document.getElementById('hardness-depth').value / 100;
   for (let l = LAYERS.length - 1; l >= 0; l--) {
-    if (depthFraction >= LAYERS[l].depth) return LAYERS[l];
+    if (depthFraction >= LAYERS[l].depth * hardDepthScale * 1.5) return LAYERS[l];
   }
   return LAYERS[0];
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// OCEAN LEVEL  (isolated for future tide support)
+// ═══════════════════════════════════════════════════════════════════
+// Compute distance from each cell to nearest drain (ocean cell or below-sea-level edge)
+// BFS from all drain cells outward. Used to bias flow toward shortest path to ocean.
+function computeDrainDistance() {
+  const N = GW * GH;
+  drainDist = new Float32Array(N);
+  drainDist.fill(Infinity);
+
+  const queue = [];
+
+  // Seed: all cells below sea level + below-sea-level edges
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
+      if (terrain[i] < seaLevel || (isEdge && terrain[i] < seaLevel)) {
+        drainDist[i] = 0;
+        queue.push(i);
+      }
+    }
+  }
+
+  // BFS — expand outward, cost = 1 per cell (could weight by uphill cost)
+  let head = 0;
+  while (head < queue.length) {
+    const i = queue[head++];
+    const d = drainDist[i] + 1;
+    const x = i % GW, y = (i / GW) | 0;
+
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+      const ni = ny * GW + nx;
+      if (d < drainDist[ni]) {
+        drainDist[ni] = d;
+        queue.push(ni);
+      }
+    }
+  }
+}
+
+// Compute hydraulic head — pressure field propagated from ocean along connected water.
+// BFS from all drain cells (ocean/below-sea-level edges). Each connected water cell
+// gets a head value that creates a smooth gradient toward the ocean.
+// Cells NOT connected to any drain retain their own water surface as head (lakes).
+function computeHydraulicHead() {
+  const N = GW * GH;
+  const WATER_CONNECT_THRESH = 0.0005; // minimum water depth to be "connected"
+  const SLOPE_PER_CELL = 0.0003;       // tiny slope ensures flow direction
+  hydraulicHead.fill(Infinity);
+
+  const queue = [];
+
+  // Seed: ocean cells and below-sea-level edges
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
+      if (terrain[i] < seaLevel || (isEdge && water[i] > WATER_CONNECT_THRESH)) {
+        hydraulicHead[i] = terrain[i] < seaLevel ? seaLevel : terrain[i];
+        queue.push(i);
+      }
+    }
+  }
+
+  // BFS: propagate head upstream along connected water
+  let head = 0;
+  while (head < queue.length) {
+    const i = queue[head++];
+    const myHead = hydraulicHead[i];
+    const x = i % GW, y = (i / GW) | 0;
+
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+      const ni = ny * GW + nx;
+      if (water[ni] < WATER_CONNECT_THRESH) continue; // not connected
+
+      // Head at neighbor = max of (its terrain, propagated head + slope)
+      const proposedHead = Math.max(terrain[ni], myHead + SLOPE_PER_CELL);
+      if (proposedHead < hydraulicHead[ni]) {
+        hydraulicHead[ni] = proposedHead;
+        queue.push(ni);
+      }
+    }
+  }
+
+  // Cells not reached by BFS (disconnected lakes): head = their water surface
+  for (let i = 0; i < N; i++) {
+    if (hydraulicHead[i] === Infinity) {
+      hydraulicHead[i] = terrain[i] + water[i];
+    }
+  }
+}
+
+function getOceanLevel() {
+  // Static for now. To add tides later:
+  // return seaLevel + tideAmplitude * Math.sin(year * tideFreq);
+  return seaLevel;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════
-function initSim() {
-  GW = Math.floor(canvas.width  / CELL_PX);
-  GH = Math.floor((canvas.height - UI_H) / CELL_PX);
+function initSim(startWithWater) {
+  SIM_SIZE = genMapSize;
+  GW = SIM_SIZE;
+  GH = SIM_SIZE;
   const N = GW * GH;
 
-  terrain     = generateTerrain();
+  terrain     = generateTerrain(currentSeed, genOctaves, genValley, genRoughness,
+                                genTerrainType, genSeaLevel, genMtnHeight, genForceOcean);
   origTerrain = terrain.slice();
+  computeDrainDistance();
   water       = new Float32Array(N);
   sediment    = new Float32Array(N);
   hardness    = new Float32Array(N);
@@ -315,80 +1300,204 @@ function initSim() {
   fluxR = new Float32Array(N);
   fluxU = new Float32Array(N);
   fluxD = new Float32Array(N);
+  saturation = new Float32Array(N);
+  hydraulicHead = new Float32Array(N);
 
   for (let i = 0; i < N; i++) hardness[i] = getHardness(i);
 
-  imgTerrain = ctx.createImageData(GW, GH);
-  imgWater   = ctx.createImageData(GW, GH);
+  // Reset camera
+  camX = 0; camY = 0; camZoom = 1.0;
 
-  // Default water source: find lowest point on left edge (upstream inlet)
-  let minH = Infinity, srcY = Math.floor(GH / 2);
-  for (let y = GH * 0.2 | 0; y < GH * 0.8 | 0; y++) {
-    if (terrain[y * GW] < minH) { minH = terrain[y * GW]; srcY = y; }
+  seaLevel = genSeaLevel;
+  rainfallRate = startWithWater !== false ? genRainfall : 0;
+
+  hasOcean = false;
+  for (let i = 0; i < N; i++) { if (terrain[i] < seaLevel) { hasOcean = true; break; } }
+
+  // Water initialization
+  sources = [];
+  if (startWithWater !== false) {
+    // Pre-fill ocean cells
+    for (let i = 0; i < N; i++) {
+      if (terrain[i] < seaLevel) {
+        water[i] = Math.max(0, seaLevel - terrain[i]);
+      }
+    }
+
+    // Seed initial water from drainage network flow accumulation
+    // Cells with high flow accumulation = major river channels → seed water there
+    if (initialFlowAccum) {
+      // Find the accumulation threshold for the top ~5% of cells (major channels)
+      const sorted = Array.from(initialFlowAccum).filter(v => v > 0).sort((a, b) => b - a);
+      const threshold = sorted[Math.floor(sorted.length * 0.05)] || 1;
+
+      for (let i = 0; i < N; i++) {
+        if (terrain[i] >= seaLevel && initialFlowAccum[i] > threshold) {
+          // Seed proportional to flow accumulation — major rivers get more
+          const amount = Math.min(0.01, (initialFlowAccum[i] / sorted[0]) * 0.01);
+          water[i] = amount;
+        }
+      }
+    }
+
+    // Place 1-2 persistent sources at the highest-accumulation mountain points
+    // (where springs would naturally emerge)
+    if (initialFlowAccum) {
+      let bestAccum = [];
+      for (let y = 3; y < GH - 3; y++) {
+        for (let x = 3; x < GW - 3; x++) {
+          const i = y * GW + x;
+          if (terrain[i] < seaLevel || terrain[i] < MOUNTAIN_THRESHOLD * 0.8) continue;
+          if (initialFlowAccum[i] > 0.5) {
+            bestAccum.push({ x, y, accum: initialFlowAccum[i] });
+          }
+        }
+      }
+      bestAccum.sort((a, b) => b.accum - a.accum);
+      for (let s = 0; s < Math.min(bestAccum.length, MAX_SOURCES); s++) {
+        sources.push({ gx: bestAccum[s].x, gy: bestAccum[s].y, rate: SIM_SPRING_RATE });
+      }
+    }
+
+    // Fallback: if nothing found
+    if (sources.length === 0) {
+      let minH = Infinity, srcY = Math.floor(GH / 2);
+      for (let y = GH * 0.2 | 0; y < GH * 0.8 | 0; y++) {
+        const h = terrain[y * GW];
+        if (h < minH && !(terrain[y * GW] < seaLevel)) { minH = h; srcY = y; }
+      }
+      sources = [{ gx: 0, gy: srcY, rate: SIM_SPRING_RATE }];
+    }
   }
-  sources = [{ gx: 0, gy: srcY, rate: 0.08 }];
 
   year = 0;
   oxbows = [];
+  prevChannelCells = null;
   document.getElementById('yr').textContent = '0';
+  document.getElementById('seed-display').textContent = currentSeed;
   document.getElementById('oxbow-n').textContent = '0';
   document.getElementById('max-depth').textContent = '0.0';
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// HYDRAULIC STEP  (virtual pipe model, Müller et al. 2008)
+// HYDRAULIC STEP
 // ═══════════════════════════════════════════════════════════════════
 function stepHydraulic() {
-  const dt = DT;
-  const g  = GRAVITY;
+  const dt = SIM_DT;
+  const g  = SIM_GRAVITY;
   const N  = GW * GH;
 
-  // Add water at sources
+  // Inject water at sources — single cell injection, no spray
   const flowRate = document.getElementById('flow-rate').value / 100;
   for (const src of sources) {
-    // spray across a small band around the source
-    for (let dy = -2; dy <= 2; dy++) {
-      const gy = src.gy + dy;
-      if (gy < 0 || gy >= GH) continue;
-      water[gy * GW + Math.max(0, src.gx)] += src.rate * flowRate * 0.6;
+    const si = src.gy * GW + src.gx;
+    if (si >= 0 && si < N) {
+      water[si] += SIM_SPRING_RATE * flowRate;
     }
   }
 
-  // ── Pass 1: update outflow fluxes ────────────────────────────────
+  // Rainfall: add water to all non-ocean cells
+  if (rainfallRate > 0) {
+    for (let i = 0; i < N; i++) {
+      if (!(terrain[i] < seaLevel)) water[i] += rainfallRate;
+    }
+  }
+
+  // Pass 0: Hydraulic head-driven routing
+  // Water flows toward lower hydraulic head (pressure gradient toward ocean).
+  // This gives rivers a strong directional pull even on flat terrain.
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      if (water[i] < 0.001) continue;
+      const h = terrain[i] + water[i];
+      const myHead = hydraulicHead[i];
+
+      // Score neighbors by: surface height drop + hydraulic head gradient
+      let bestScore = -Infinity, bestN = -1, bestDrop = 0;
+      for (const ni of [i-1, i+1, i-GW, i+GW]) {
+        const nh = terrain[ni] + water[ni];
+        const drop = h - nh;
+
+        // Hydraulic head gradient — strong pull toward ocean
+        const headDrop = myHead - hydraulicHead[ni];
+
+        // Combined score: physical slope + pressure gradient (head dominates)
+        const score = drop * 0.3 + headDrop * 0.7;
+        if (score < 0.00002) continue;
+
+        if (score > bestScore) { bestScore = score; bestN = ni; bestDrop = Math.max(0, drop); }
+      }
+
+      if (bestN >= 0) {
+        const transfer = Math.min(water[i] * 0.45, Math.max(bestDrop, bestScore) * 0.5);
+        water[i] -= transfer;
+        water[bestN] += transfer;
+      }
+    }
+  }
+
+  // Pass 0b: Water level equalization — connected water seeks common level
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      if (water[i] < 0.001) continue;
+      const myH = terrain[i] + water[i]; // my water surface height
+
+      // Average surface height with wet neighbors
+      let sumH = myH, count = 1;
+      for (const ni of [i-1, i+1, i-GW, i+GW]) {
+        if (water[ni] > 0.001) {
+          sumH += terrain[ni] + water[ni];
+          count++;
+        }
+      }
+      if (count > 1) {
+        const avgH = sumH / count;
+        // Move toward average surface (equalize), but can't go below terrain
+        const newWater = Math.max(0, avgH - terrain[i]);
+        // Blend 30% toward equalized level per step
+        water[i] += (newWater - water[i]) * 0.3;
+      }
+    }
+  }
+
+  // Pass 1: update outflow fluxes (pipe model for detailed dynamics)
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
-      const h = terrain[i] + water[i];  // water surface elevation
+      const h = terrain[i] + water[i];
 
-      // Right
+      // Flux to neighbors — at edges, water can flow "off map" (virtual neighbor at terrain height, no water)
       if (x < GW - 1) {
         const j = i + 1;
-        const dh = h - terrain[j] - water[j];
-        fluxR[i] = Math.max(0, fluxR[i] + dt * g * dh);
-      } else { fluxR[i] = 0; }
+        fluxR[i] = Math.max(0, fluxR[i] + dt * g * (h - terrain[j] - water[j]));
+      } else {
+        // Right edge: flow off map if water surface > terrain
+        fluxR[i] = Math.max(0, fluxR[i] + dt * g * water[i]);
+      }
 
-      // Left
       if (x > 0) {
         const j = i - 1;
-        const dh = h - terrain[j] - water[j];
-        fluxL[i] = Math.max(0, fluxL[i] + dt * g * dh);
-      } else { fluxL[i] = 0; }
+        fluxL[i] = Math.max(0, fluxL[i] + dt * g * (h - terrain[j] - water[j]));
+      } else {
+        fluxL[i] = Math.max(0, fluxL[i] + dt * g * water[i]);
+      }
 
-      // Down
       if (y < GH - 1) {
         const j = i + GW;
-        const dh = h - terrain[j] - water[j];
-        fluxD[i] = Math.max(0, fluxD[i] + dt * g * dh);
-      } else { fluxD[i] = 0; }
+        fluxD[i] = Math.max(0, fluxD[i] + dt * g * (h - terrain[j] - water[j]));
+      } else {
+        fluxD[i] = Math.max(0, fluxD[i] + dt * g * water[i]);
+      }
 
-      // Up
       if (y > 0) {
         const j = i - GW;
-        const dh = h - terrain[j] - water[j];
-        fluxU[i] = Math.max(0, fluxU[i] + dt * g * dh);
-      } else { fluxU[i] = 0; }
+        fluxU[i] = Math.max(0, fluxU[i] + dt * g * (h - terrain[j] - water[j]));
+      } else {
+        fluxU[i] = Math.max(0, fluxU[i] + dt * g * water[i]);
+      }
 
-      // Scale fluxes so we don't drain more than available
       const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]) * dt;
       if (totalOut > water[i] + MIN_WATER) {
         const scale = (water[i] + MIN_WATER) / totalOut;
@@ -398,8 +1507,9 @@ function stepHydraulic() {
     }
   }
 
-  // ── Pass 2: update water depth ───────────────────────────────────
+  // Pass 2: update water depth
   let maxDepth = 0;
+  const oLvl = getOceanLevel();
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
@@ -412,80 +1522,152 @@ function stepHydraulic() {
       const net = (inR + inL + inD + inU - fluxL[i] - fluxR[i] - fluxU[i] - fluxD[i]) * dt;
       water[i] = Math.max(0, water[i] + net);
 
-      // Evaporation
-      water[i] *= (1 - EVAP);
+      if (terrain[i] < seaLevel) {
+        // Ocean = infinite sink. Snap to sea level immediately.
+        // Any river inflow is absorbed instantly — the ocean is a siphon.
+        water[i] = Math.max(0, oLvl - terrain[i]);
+      } else {
+        // Minor evaporation — only thin films (< 0.003) evaporate noticeably.
+        // Rivers and lakes persist; moisture films vanish.
+        if (water[i] > 0 && water[i] < 0.003) {
+          water[i] *= (1 - SIM_EVAP * 2);
+        }
 
-      // Drain at right edge (outlet)
-      if (x === GW - 1) water[i] *= 0.85;
+        // Soil absorption with saturation limit.
+        // Once soil is fully saturated (sat=1), no more absorption — water stays on surface.
+        // Saturation slowly recovers (dries out) when no water is present.
+        if (water[i] > 0 && saturation[i] < 1.0) {
+          const permeability = 1.0 / (hardness[i] || 1);
+          const absorbAmt = SIM_ABSORB * permeability * (1.0 - saturation[i]);
+          const absorbed = Math.min(water[i], absorbAmt);
+          water[i] -= absorbed;
+          saturation[i] = Math.min(1.0, saturation[i] + absorbed * 20); // fills up fast
+        } else if (water[i] <= 0 && saturation[i] > 0) {
+          // Dry out slowly when no water present
+          saturation[i] = Math.max(0, saturation[i] - 0.001);
+        }
+
+        // Edge drain: water exits at the rate it was flowing outward.
+        // The flux at edges now represents outward flow (computed above).
+        // Outward flux is already subtracted from water in the net flow calc,
+        // but since there's no neighbor to receive it, we just let it leave.
+        // Ocean edges drain faster (infinite capacity).
+        if (x === 0 || x === GW - 1 || y === 0 || y === GH - 1) {
+          if (terrain[i] < seaLevel) {
+            // Ocean edge — siphon
+            water[i] = Math.max(0, seaLevel - terrain[i]);
+          }
+          // All edges: outward flux already removes water via the net flow calculation
+          // since edge flux flows "off map" and nothing flows back in
+        }
+      }
 
       if (water[i] > maxDepth) maxDepth = water[i];
     }
   }
-
   return maxDepth;
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// EROSION / DEPOSITION  (capacity-based sediment transport)
+// EROSION / DEPOSITION
 // ═══════════════════════════════════════════════════════════════════
 function stepErosion() {
   const erodSlider = document.getElementById('erodibility').value / 100;
-  const hardDepth  = document.getElementById('hardness-depth').value / 100;
 
   for (let y = 1; y < GH - 1; y++) {
     for (let x = 1; x < GW - 1; x++) {
       const i = y * GW + x;
       if (water[i] < MIN_WATER) continue;
+      if (terrain[i] < seaLevel) continue; // don't erode ocean floor
 
-      // Velocity from flux differentials
-      const vx = ((fluxR[x > 0 ? i - 1 : i] - fluxL[i]) + (fluxR[i] - fluxL[x < GW-1 ? i + 1 : i])) * 0.5;
-      const vy = ((fluxD[y > 0 ? i - GW : i] - fluxU[i]) + (fluxD[i] - fluxU[y < GH-1 ? i + GW : i])) * 0.5;
-      const speed2 = vx * vx + vy * vy;
-      const speed  = Math.sqrt(speed2);
+      const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5;
+      const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5;
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      if (speed < 0.005) continue; // stagnant water does NOT erode
 
-      // Layer hardness at current depth
-      const depthCut = Math.max(0, origTerrain[i] - terrain[i]);
-      let localH = LAYERS[0].hardness;
-      for (let l = LAYERS.length - 1; l >= 0; l--) {
-        if (depthCut >= LAYERS[l].depth * hardDepth * 1.5) {
-          localH = LAYERS[l].hardness;
-          break;
-        }
-      }
+      // Skip basin bottoms: if this cell is a local minimum in terrain,
+      // water is converging here, not flowing through. No erosion.
+      // This prevents the "shower drain" effect where one cell erodes
+      // into a hole and all water rushes down it.
+      if (terrain[i] <= terrain[i-1] && terrain[i] <= terrain[i+1] &&
+          terrain[i] <= terrain[i-GW] && terrain[i] <= terrain[i+GW]) continue;
+      // Pressure amplifies erosion only when water is already flowing.
+      // Deep fast river = very erosive. Deep still pool = zero erosion.
+      // Slope factor: steeper terrain erodes much faster (waterfalls, canyon heads)
+      const dhdx = (terrain[i+1] - terrain[i-1]) * 0.5;
+      const dhdy = (terrain[i+GW] - terrain[i-GW]) * 0.5;
+      const slope = Math.sqrt(dhdx * dhdx + dhdy * dhdy);
+      const slopeFactor = 1.0 + slope * 15;
 
-      const Ks_eff = Ks_base * erodSlider / localH;
+      const pressureBoost = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
+      const erosionForce = speed * pressureBoost * slopeFactor;
 
-      // Equilibrium sediment capacity
-      const C_eq = Kc * speed * Math.sqrt(water[i]);
+      const localH = getHardness(i);
+      const Ks_eff = SIM_Ks * erodSlider / localH;
+      const C_eq = SIM_Kc * erosionForce * Math.sqrt(water[i]);
 
       if (C_eq > sediment[i]) {
-        // Erode
-        const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.002);
-        terrain[i]  -= delta;
-        sediment[i] += delta;
+        const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.015);
+        // Split erosion: 30% vertical (bed), 70% lateral (banks)
+        const verticalDelta = delta * 0.3;
+        const lateralDelta = delta * 0.7;
+
+        // Constrain vertical erosion: can't erode below the lowest downstream neighbor.
+        // This prevents holes — erosion always creates a smooth gradient from high to low.
+        const lowestNeighbor = Math.min(
+          terrain[i-1], terrain[i+1], terrain[i-GW], terrain[i+GW]
+        );
+        const minAllowed = lowestNeighbor - 0.001; // tiny margin so water still flows toward it
+        const actualVertical = Math.min(verticalDelta, Math.max(0, terrain[i] - minAllowed));
+
+        terrain[i]  -= actualVertical;
+        sediment[i] += actualVertical + lateralDelta; // sediment from both vertical + lateral
+
+        // Lateral erosion: erode banks perpendicular to flow direction
+        if (speed > 0.01 && lateralDelta > 0.00001) {
+          // Flow direction
+          const fLen = speed;
+          const fnx = vx / fLen, fny = vy / fLen;
+          // Perpendicular (bank) directions
+          const bnx = -fny, bny = fnx;
+          // Left and right bank cells
+          const lx = x + Math.round(bnx), ly = y + Math.round(bny);
+          const rx = x - Math.round(bnx), ry = y - Math.round(bny);
+          if (lx > 0 && lx < GW-1 && ly > 0 && ly < GH-1) {
+            const li = ly * GW + lx;
+            if (terrain[li] >= seaLevel) {
+              const bankH = getHardness(li);
+              terrain[li] -= lateralDelta * 0.5 / bankH;
+            }
+          }
+          if (rx > 0 && rx < GW-1 && ry > 0 && ry < GH-1) {
+            const ri = ry * GW + rx;
+            if (terrain[ri] >= seaLevel) {
+              const bankH = getHardness(ri);
+              terrain[ri] -= lateralDelta * 0.5 / bankH;
+            }
+          }
+        }
       } else {
-        // Deposit
-        const delta = Kd * (sediment[i] - C_eq);
-        terrain[i]  += delta;
-        sediment[i] = Math.max(0, sediment[i] - delta);
+        // Deposition: terrain can never rise above original surface
+        const maxRise = origTerrain[i] - terrain[i];
+        if (maxRise > 0) {
+          const delta = Math.min(SIM_Kd * (sediment[i] - C_eq), maxRise);
+          terrain[i]  += delta;
+          sediment[i] = Math.max(0, sediment[i] - delta);
+        }
+        // Excess sediment decays (washed out to sea / dissolved)
+        sediment[i] *= 0.98;
       }
 
-      // Thermal erosion: smooth steep slopes slightly
       const h = terrain[i];
-      const neighbors = [
-        terrain[i - 1], terrain[i + 1],
-        terrain[i - GW], terrain[i + GW]
-      ];
-      let tSum = 0;
-      for (const hn of neighbors) tSum += (hn - h);
-      terrain[i] += Kt * tSum * 0.25;
-
-      // Clamp
-      terrain[i] = Math.max(0.01, terrain[i]);
+      const tSum = (terrain[i-1] - h) + (terrain[i+1] - h)
+                 + (terrain[i-GW] - h) + (terrain[i+GW] - h);
+      terrain[i] += SIM_Kt * tSum * 0.25;
+      // No hard floor — inland basins can go below sea level (e.g., Dead Sea)
     }
   }
 
-  // Simple sediment advection: move sediment toward neighbors with outflow
   const tmpSed = sediment.slice();
   for (let y = 1; y < GH - 1; y++) {
     for (let x = 1; x < GW - 1; x++) {
@@ -494,182 +1676,475 @@ function stepErosion() {
       const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
       if (totalOut < 1e-8) continue;
       const moved = Math.min(sediment[i] * 0.4, sediment[i]);
-      if (fluxR[i] > 0 && x < GW - 1) { tmpSed[i + 1]  += moved * fluxR[i] / totalOut; }
-      if (fluxL[i] > 0 && x > 0)       { tmpSed[i - 1]  += moved * fluxL[i] / totalOut; }
-      if (fluxD[i] > 0 && y < GH - 1) { tmpSed[i + GW] += moved * fluxD[i] / totalOut; }
-      if (fluxU[i] > 0 && y > 0)       { tmpSed[i - GW] += moved * fluxU[i] / totalOut; }
+      if (fluxR[i] > 0 && x < GW - 1) tmpSed[i + 1]  += moved * fluxR[i] / totalOut;
+      if (fluxL[i] > 0 && x > 0)       tmpSed[i - 1]  += moved * fluxL[i] / totalOut;
+      if (fluxD[i] > 0 && y < GH - 1) tmpSed[i + GW] += moved * fluxD[i] / totalOut;
+      if (fluxU[i] > 0 && y > 0)       tmpSed[i - GW] += moved * fluxU[i] / totalOut;
       tmpSed[i] -= moved;
     }
   }
   sediment.set(tmpSed);
-}
 
-// ═══════════════════════════════════════════════════════════════════
-// RENDERING
-// ═══════════════════════════════════════════════════════════════════
+  // ── Hydrostatic pressure erosion ──
+  // Water pooling against a dry barrier erodes the barrier.
+  // This is how rivers break through ridges naturally — water pools behind
+  // a ridge, the weakest point erodes, water rushes through the gap.
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      if (water[i] < 0.005) continue; // need meaningful pool depth
 
-// Elevation-based terrain color (no water)
-function terrainColor(i) {
-  if (showLayers) {
-    const lc = layerColor(i);
-    // Shade by elevation within the layer
-    const e = terrain[i];
-    const shade = 0.75 + e * 0.45;
-    return [lc.r * shade | 0, lc.g * shade | 0, lc.b * shade | 0];
-  } else {
-    // Satellite-style gradient
-    const e = terrain[i];
-    if (e < 0.25) {
-      // Lowland: sandy
-      const t = e / 0.25;
-      return [lerp(180,200,t)|0, lerp(160,184,t)|0, lerp(100,130,t)|0];
-    } else if (e < 0.55) {
-      const t = (e - 0.25) / 0.30;
-      return [lerp(100,130,t)|0, lerp(140,160,t)|0, lerp(70,90,t)|0];
-    } else if (e < 0.75) {
-      const t = (e - 0.55) / 0.20;
-      return [lerp(130,160,t)|0, lerp(110,100,t)|0, lerp(60,60,t)|0];
-    } else {
-      const t = Math.min(1, (e - 0.75) / 0.25);
-      return [lerp(160,230,t)|0, lerp(100,220,t)|0, lerp(60,220,t)|0];
+      // Check each neighbor: if it's dry and higher, water pushes against it
+      for (const ni of [i-1, i+1, i-GW, i+GW]) {
+        if (water[ni] > 0.002) continue; // neighbor has water too — not a barrier
+        if (terrain[ni] <= terrain[i] + water[i]) continue; // not blocking
+
+        // Barrier found: erode it proportional to water depth behind it
+        const pressure = water[i] * SIM_GRAVITY;
+        const barrierH = getHardness(ni);
+        const erodeAmt = SIM_Ks * erodSlider * pressure * 0.1 / barrierH;
+        terrain[ni] -= Math.min(erodeAmt, 0.003);
+      }
     }
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// OXBOW DETECTION
+// ═══════════════════════════════════════════════════════════════════
+let prevChannelCells = null;
+
+function detectOxbows() {
+  const threshold = 0.005;
+  const channelCells = new Set();
+  for (let i = 0; i < GW * GH; i++) {
+    if (water[i] > threshold && !(terrain[i] < seaLevel)) channelCells.add(i);
+  }
+  if (prevChannelCells) {
+    const lost = [];
+    for (const cell of prevChannelCells) {
+      if (!channelCells.has(cell) && water[cell] > MIN_WATER * 0.5) lost.push(cell);
+    }
+    if (lost.length > 15) {
+      const visited = new Set();
+      for (const cell of lost) {
+        if (visited.has(cell)) continue;
+        const queue = [cell];
+        const component = [];
+        visited.add(cell);
+        while (queue.length > 0) {
+          const c = queue.shift();
+          component.push(c);
+          const cx = c % GW, cy = (c / GW) | 0;
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+            const ni = ny * GW + nx;
+            if (!visited.has(ni) && lost.includes(ni)) {
+              visited.add(ni);
+              queue.push(ni);
+            }
+          }
+        }
+        if (component.length > 20) {
+          oxbows.push({
+            cells: component,
+            age: year,
+            cx: component.reduce((s, c) => s + (c % GW), 0) / component.length,
+            cy: component.reduce((s, c) => s + ((c / GW) | 0), 0) / component.length,
+          });
+        }
+      }
+    }
+  }
+  prevChannelCells = channelCells;
+  document.getElementById('oxbow-n').textContent = oxbows.length;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDERING — full resolution, bicubic interpolation
+// ═══════════════════════════════════════════════════════════════════
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-function renderTerrain() {
-  const d = imgTerrain.data;
-  for (let i = 0; i < GW * GH; i++) {
-    const [r, g, b] = terrainColor(i);
-    const p = i * 4;
-    d[p]   = r;
-    d[p+1] = g;
-    d[p+2] = b;
-    d[p+3] = 255;
-  }
-
-  // Contour lines: scan horizontally, mark cells where elevation crosses a level
-  const CONTOUR_INTERVAL = 0.05;
-  for (let y = 0; y < GH; y++) {
-    for (let x = 0; x < GW - 1; x++) {
-      const i  = y * GW + x;
-      const h0 = terrain[i];
-      const h1 = terrain[i + 1];
-      const level0 = Math.floor(h0 / CONTOUR_INTERVAL);
-      const level1 = Math.floor(h1 / CONTOUR_INTERVAL);
-      if (level0 !== level1) {
-        const p = i * 4;
-        d[p]   = Math.min(255, d[p]   + 40);
-        d[p+1] = Math.min(255, d[p+1] + 40);
-        d[p+2] = Math.min(255, d[p+2] + 40);
-      }
-    }
-  }
-  // Vertical contours
-  for (let y = 0; y < GH - 1; y++) {
-    for (let x = 0; x < GW; x++) {
-      const i  = y * GW + x;
-      const h0 = terrain[i];
-      const h1 = terrain[i + GW];
-      const level0 = Math.floor(h0 / CONTOUR_INTERVAL);
-      const level1 = Math.floor(h1 / CONTOUR_INTERVAL);
-      if (level0 !== level1) {
-        const p = i * 4;
-        d[p]   = Math.min(255, d[p]   + 30);
-        d[p+1] = Math.min(255, d[p+1] + 30);
-        d[p+2] = Math.min(255, d[p+2] + 30);
-      }
-    }
-  }
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * ((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
 }
 
-function renderWater(maxDepth) {
-  const d = imgWater.data;
-  const invMax = maxDepth > 0 ? 1 / maxDepth : 1;
-
-  for (let i = 0; i < GW * GH; i++) {
-    const w = water[i];
-    const p = i * 4;
-    if (w < MIN_WATER) {
-      d[p+3] = 0;
-      continue;
-    }
-
-    const depth = Math.min(1, w * invMax);
-    const alpha = Math.min(240, 60 + depth * 190) | 0;
-
-    if (showPressure) {
-      // Pressure = water depth; map to blue→cyan gradient
-      const pressure = Math.min(1, w * 8);
-      d[p]   = lerp(20,  80,  pressure) | 0;
-      d[p+1] = lerp(80,  200, pressure) | 0;
-      d[p+2] = lerp(200, 255, pressure) | 0;
-    } else if (showVelocity) {
-      // Velocity magnitude: blue→white
-      const vx = ((fluxR[i] || 0) - (fluxL[i] || 0));
-      const vy = ((fluxD[i] || 0) - (fluxU[i] || 0));
-      const spd = Math.min(1, Math.sqrt(vx*vx + vy*vy) * 3);
-      d[p]   = lerp(20,  255, spd) | 0;
-      d[p+1] = lerp(60,  255, spd) | 0;
-      d[p+2] = lerp(180, 255, spd) | 0;
-    } else {
-      // Natural water: deep blue → shallow teal
-      d[p]   = lerp(15, 60,  depth) | 0;
-      d[p+1] = lerp(60, 140, depth) | 0;
-      d[p+2] = lerp(170, 200, depth) | 0;
-    }
-    d[p+3] = alpha;
+function sampleGrid(grid, gxf, gyf) {
+  const gx = Math.floor(gxf);
+  const gy = Math.floor(gyf);
+  const tx = gxf - gx;
+  const ty = gyf - gy;
+  const cols = new Float64Array(4);
+  for (let j = -1; j <= 2; j++) {
+    const cy = Math.max(0, Math.min(GH - 1, gy + j));
+    const r0 = grid[cy * GW + Math.max(0, Math.min(GW-1, gx-1))];
+    const r1 = grid[cy * GW + Math.max(0, Math.min(GW-1, gx))];
+    const r2 = grid[cy * GW + Math.max(0, Math.min(GW-1, gx+1))];
+    const r3 = grid[cy * GW + Math.max(0, Math.min(GW-1, gx+2))];
+    cols[j + 1] = catmullRom(r0, r1, r2, r3, tx);
   }
+  return catmullRom(cols[0], cols[1], cols[2], cols[3], ty);
 }
+
+function sampleGridFast(grid, gxf, gyf) {
+  const gx0 = Math.max(0, Math.min(GW - 2, gxf | 0));
+  const gy0 = Math.max(0, Math.min(GH - 2, gyf | 0));
+  const tx = gxf - gx0;
+  const ty = gyf - gy0;
+  const i00 = gy0 * GW + gx0;
+  return grid[i00] * (1-tx) * (1-ty)
+       + grid[i00 + 1] * tx * (1-ty)
+       + grid[i00 + GW] * (1-tx) * ty
+       + grid[i00 + GW + 1] * tx * ty;
+}
+
+// Color stops: ocean → beach → plains → mountains → snow
+const ELEV_STOPS = [
+  [0.00,  45,  40,  30],  // deep seabed — dark sediment
+  [0.08,  65,  58,  42],  // mid seabed — muddy
+  [0.16,  95,  85,  60],  // continental shelf — sandy mud
+  [0.20, 155, 148, 115],  // coastal lowland
+  [0.26, 165, 150,  95],  // sandy lowland
+  [0.32, 125, 155,  82],  // lowland green
+  [0.42, 100, 140,  68],  // mid green (plains)
+  [0.52, 130, 125,  68],  // transitional brown-green
+  [0.62, 148, 110,  62],  // foothills brown
+  [0.72, 138, 132, 128],  // gray rock
+  [0.82, 175, 170, 165],  // high rock
+  [0.90, 215, 215, 220],  // snow line
+  [1.00, 242, 242, 248],  // peak snow
+];
+
+function elevColor(e) {
+  for (let i = 1; i < ELEV_STOPS.length; i++) {
+    if (e <= ELEV_STOPS[i][0]) {
+      const s0 = ELEV_STOPS[i-1], s1 = ELEV_STOPS[i];
+      const t = (e - s0[0]) / (s1[0] - s0[0]);
+      return [
+        lerp(s0[1], s1[1], t) | 0,
+        lerp(s0[2], s1[2], t) | 0,
+        lerp(s0[3], s1[3], t) | 0
+      ];
+    }
+  }
+  const last = ELEV_STOPS[ELEV_STOPS.length - 1];
+  return [last[1], last[2], last[3]];
+}
+
+// Pre-smoothed water buffer for rendering (avoids dithering from raw interpolation)
+let waterSmooth = null;
 
 function render(maxDepth) {
-  const W = canvas.width, H = canvas.height - UI_H;
+  const W = canvas.width, H = canvas.height;
+  const N = GW * GH;
+  if (!imgFull || imgFull.width !== W || imgFull.height !== H) {
+    imgFull = ctx.createImageData(W, H);
+  }
+  if (!waterSmooth || waterSmooth.length !== N) {
+    waterSmooth = new Float32Array(N);
+  }
 
-  renderTerrain();
-  renderWater(maxDepth);
+  // Pre-smooth water at grid resolution: 2-pass box blur
+  // This eliminates cell-boundary artifacts when bilinear sampled
+  waterSmooth.set(water);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        waterSmooth[i] = water[i] * 0.4 +
+          (waterSmooth[i-1] + waterSmooth[i+1] + waterSmooth[i-GW] + waterSmooth[i+GW]) * 0.15;
+      }
+    }
+  }
 
-  // Blit terrain
-  ctx.putImageData(imgTerrain, 0, 0);
+  const d = imgFull.data;
+  const waterOpacity = document.getElementById('water-opacity').value / 100;
+  const REF_DEPTH = 0.04;
 
-  // Scale water imagedata onto canvas (CELL_PX upscaling)
-  // Use offscreen canvas for pixel-perfect upscaling
-  offCtx.putImageData(imgWater, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(offCanvas, 0, 0, GW, GH, 0, 0, GW * CELL_PX, GH * CELL_PX);
+  const viewSize = SIM_SIZE / camZoom;
+  const gxStart = camX, gyStart = camY;
+  const pxToGrid = viewSize / W;
+  const pyToGrid = viewSize / H;
 
-  // Similarly blit terrain (upscaled)
-  offCtx.putImageData(imgTerrain, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(offCanvas, 0, 0, GW, GH, 0, 0, GW * CELL_PX, GH * CELL_PX);
+  for (let py = 0; py < H; py++) {
+    const gyf = gyStart + py * pyToGrid;
+    for (let px = 0; px < W; px++) {
+      const gxf = gxStart + px * pxToGrid;
+      const off = (py * W + px) * 4;
 
-  // Water on top
-  offCtx.putImageData(imgWater, 0, 0);
-  ctx.drawImage(offCanvas, 0, 0, GW, GH, 0, 0, GW * CELL_PX, GH * CELL_PX);
+      if (gxf < 0 || gxf >= GW - 1 || gyf < 0 || gyf >= GH - 1) {
+        d[off] = 13; d[off+1] = 17; d[off+2] = 23; d[off+3] = 255;
+        continue;
+      }
+
+      let tr, tg, tb;
+      const gx = Math.min(GW - 1, gxf | 0);
+      const gy = Math.min(GH - 1, gyf | 0);
+      const ci = gy * GW + gx;
+      const h = sampleGrid(terrain, gxf, gyf);
+      const isOcean = (terrain[ci] < seaLevel);
+      // Bilinear sample from pre-smoothed water → smooth per-pixel values, no dithering
+      const w = Math.max(0, sampleGridFast(waterSmooth, gxf, gyf));
+
+      if (viewMode === 'height') {
+        const v = Math.max(0, Math.min(255, h * 280)) | 0;
+        tr = v; tg = v; tb = v;
+      } else if (viewMode === 'exposed') {
+        if (w > MIN_WATER * 2 || isOcean) {
+          const depth = isOcean ? Math.min(1, (seaLevel - h) / 0.15) : Math.min(1, w / REF_DEPTH);
+          tr = lerp(50, 15, depth) | 0;
+          tg = lerp(120, 40, depth) | 0;
+          tb = lerp(200, 130, depth) | 0;
+        } else {
+          const shade = 0.7 + h * 0.5;
+          tr = 180 * shade | 0;
+          tg = 165 * shade | 0;
+          tb = 130 * shade | 0;
+        }
+      } else {
+        if (showLayers) {
+          const lc = layerColor(ci);
+          const e = terrain[ci];
+          const noiseShade = hardnessNoise ? (0.9 + hardnessNoise[ci] * 0.2) : 1.0;
+          const shade = (0.75 + e * 0.45) * noiseShade;
+          tr = lc.r * shade | 0;
+          tg = lc.g * shade | 0;
+          tb = lc.b * shade | 0;
+        } else {
+          [tr, tg, tb] = elevColor(h);
+        }
+      }
+
+      // Contour lines — render on all terrain including underwater
+      if (showContours) {
+        const hR = sampleGridFast(terrain, gxf + pxToGrid, gyf);
+        const hD = sampleGridFast(terrain, gxf, gyf + pyToGrid);
+        const lvl  = Math.floor(h / CONTOUR_INTERVAL);
+        const lvlR = Math.floor(hR / CONTOUR_INTERVAL);
+        const lvlD = Math.floor(hD / CONTOUR_INTERVAL);
+        if (lvl !== lvlR || lvl !== lvlD) {
+          const crossLvl = Math.max(lvl, lvlR, lvlD);
+          const isMajor = crossLvl % MAJOR_CONTOUR_EVERY === 0;
+          const boost = isMajor ? 55 : 20;
+          tr = Math.min(255, tr + boost);
+          tg = Math.min(255, tg + boost);
+          tb = Math.min(255, tb + boost);
+        }
+      }
+
+      // Water overlay — bilinear sampled from pre-smoothed array
+      if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : SIM_WATER_THRESH)) {
+        const depth = Math.min(1, w / REF_DEPTH);
+        const alpha = Math.min(1, (0.4 + depth * 0.6)) * waterOpacity;
+
+        let wr, wg, wb;
+        if (showPressure) {
+          const pN = Math.min(1, w * SIM_GRAVITY * 1.5);
+          wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
+        } else if (showVelocity) {
+          // True velocity = flux / water_depth. Deep stagnant pools → low velocity.
+          const wd = Math.max(water[ci], 0.005); // avoid division by zero
+          const vx = ((fluxR[ci] || 0) - (fluxL[ci] || 0)) / wd;
+          const vy = ((fluxD[ci] || 0) - (fluxU[ci] || 0)) / wd;
+          const spd = Math.min(1, Math.sqrt(vx*vx + vy*vy) * 0.5);
+          wr = lerp(20, 255, spd) | 0; wg = lerp(60, 255, spd) | 0; wb = lerp(180, 255, spd) | 0;
+        } else {
+          wr = lerp(20, 65, depth) | 0; wg = lerp(80, 150, depth) | 0; wb = lerp(190, 220, depth) | 0;
+        }
+
+        const a = alpha;
+        tr = tr * (1 - a) + wr * a | 0;
+        tg = tg * (1 - a) + wg * a | 0;
+        tb = tb * (1 - a) + wb * a | 0;
+      }
+
+      d[off] = tr; d[off+1] = tg; d[off+2] = tb; d[off+3] = 255;
+    }
+  }
+
+  ctx.putImageData(imgFull, 0, 0);
+
+  // Helper: grid coords → screen coords
+  const g2sx = gx => (gx - camX) / (SIM_SIZE / camZoom) * W;
+  const g2sy = gy => (gy - camY) / (SIM_SIZE / camZoom) * H;
+  const cellPx = W / (SIM_SIZE / camZoom);
+
+  // Fault line debug overlay
+  if (showFaultLines && tectonicStress) {
+    ctx.globalAlpha = 0.6;
+    for (let gy = 0; gy < GH; gy++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const i = gy * GW + gx;
+        const s = tectonicStress[i];
+        const f = faultStress ? faultStress[i] : 0;
+        const absS = Math.abs(s);
+        if (absS < 0.05 && f < 0.1) continue;
+
+        const sx = g2sx(gx), sy = g2sy(gy);
+        if (sx < -cellPx || sx > W + cellPx || sy < -cellPx || sy > H + cellPx) continue;
+
+        if (s > 0.05) {
+          // Convergent — red
+          ctx.fillStyle = `rgba(255,60,30,${Math.min(0.8, absS * 2)})`;
+        } else if (s < -0.05) {
+          // Divergent — violet
+          ctx.fillStyle = `rgba(180,50,255,${Math.min(0.8, absS * 2)})`;
+        } else if (f > 0.1) {
+          // Transform / fault stress — yellow
+          ctx.fillStyle = `rgba(255,220,40,${Math.min(0.8, f * 0.5)})`;
+        } else continue;
+
+        ctx.fillRect(sx, sy, Math.max(1, cellPx), Math.max(1, cellPx));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // Source markers
   for (const src of sources) {
-    const px = src.gx * CELL_PX + CELL_PX / 2;
-    const py = src.gy * CELL_PX + CELL_PX / 2;
+    const sx = g2sx(src.gx + 0.5), sy = g2sy(src.gy + 0.5);
+    if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
     ctx.beginPath();
-    ctx.arc(px, py, 5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(100,200,255,0.6)';
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(100,200,255,0.5)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(150,230,255,0.9)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(150,230,255,0.8)';
+    ctx.lineWidth = 1;
     ctx.stroke();
   }
 
-  // Update stats
   document.getElementById('yr').textContent      = Math.round(year).toLocaleString();
   document.getElementById('max-depth').textContent = (maxDepth * 100).toFixed(1);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// OFFSCREEN CANVAS  (for pixel upscaling)
+// TECTONIC STEP — plates drift, boundaries build mountains / rifts / quakes
 // ═══════════════════════════════════════════════════════════════════
-const offCanvas = document.createElement('canvas');
-const offCtx    = offCanvas.getContext('2d');
+function stepTectonics() {
+  if (!plates.length || !tectonicStress) return;
+  const N = GW * GH;
+  const numPlates = plates.length;
+
+  // ── Move plates ──
+  for (const p of plates) {
+    p.px += p.vx * SIM_TECTONIC_SPEED;
+    p.py += p.vy * SIM_TECTONIC_SPEED;
+    // Wrap at boundaries (toroidal)
+    if (p.px < 0) p.px += GW;
+    if (p.px >= GW) p.px -= GW;
+    if (p.py < 0) p.py += GH;
+    if (p.py >= GH) p.py -= GH;
+  }
+
+  // ── Recompute stress field from new plate positions ──
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      const fx = x / GW, fy = y / GH;
+
+      // Noise-warped coordinates — makes plate boundaries irregular/curved
+      const warpX = x + simplex2D(fx * 5 + 300, fy * 5 + 300) * 12;
+      const warpY = y + simplex2D(fx * 5 + 400, fy * 5 + 400) * 12;
+
+      // Find 2 nearest plates using warped coordinates
+      let d1 = Infinity, d2 = Infinity, p1 = 0, p2 = 0;
+      for (let p = 0; p < numPlates; p++) {
+        let dx = warpX - plates[p].px;
+        let dy = warpY - plates[p].py;
+        if (dx > GW/2) dx -= GW; if (dx < -GW/2) dx += GW;
+        if (dy > GH/2) dy -= GH; if (dy < -GH/2) dy += GH;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < d1) { d2 = d1; p2 = p1; d1 = d; p1 = p; }
+        else if (d < d2) { d2 = d; p2 = p; }
+      }
+
+      const boundaryDist = Math.abs(d1 - d2);
+      // Wide falloff — influence extends deep into plates, no sharp lines
+      const boundaryProx = Math.exp(-boundaryDist * boundaryDist / 800);
+
+      // Relative velocity
+      const relVx = plates[p1].vx - plates[p2].vx;
+      const relVy = plates[p1].vy - plates[p2].vy;
+      // Normal from p1 toward p2
+      let nx = plates[p2].px - plates[p1].px;
+      let ny = plates[p2].py - plates[p1].py;
+      // Wrap normal for toroidal
+      if (nx > GW/2) nx -= GW; if (nx < -GW/2) nx += GW;
+      if (ny > GH/2) ny -= GH; if (ny < -GH/2) ny += GH;
+      const nl = Math.sqrt(nx * nx + ny * ny) || 1;
+      const nnx = nx / nl, nny = ny / nl;
+
+      // Normal component (convergence) and tangential component (transform)
+      const convergence = relVx * nnx + relVy * nny;
+      const tangent = Math.abs(relVx * (-nny) + relVy * nnx);
+
+      tectonicStress[i] = convergence * boundaryProx;
+
+      // ── Apply stress to terrain ──
+      // Use soft thresholds — no hard cutoffs that create line artifacts
+      if (boundaryProx > 0.02) {
+        if (convergence > 0) {
+          // Convergent: uplift scaled smoothly by both convergence and proximity
+          // No hard cap — let thermal erosion and normalization limit height naturally
+          terrain[i] += SIM_UPLIFT_RATE * convergence * boundaryProx;
+        } else if (convergence < 0) {
+          // Divergent: subsidence
+          terrain[i] += SIM_RIFT_RATE * convergence * boundaryProx;
+        }
+        // Soft clamp top only — mountains slow down, but no floor on basins
+        if (terrain[i] > 0.96) terrain[i] = 0.96 + (terrain[i] - 0.96) * 0.1;
+
+        // Transform zones: accumulate fault stress (smooth threshold)
+        if (tangent > 0.1 && boundaryProx > 0.05) {
+          faultStress[i] += tangent * boundaryProx * 0.05;
+
+          // Extra erosion at fault zones (crumbling, weathering)
+          if (y > 0 && y < GH-1 && x > 0 && x < GW-1) {
+            const h = terrain[i];
+            const avg = (terrain[i-1] + terrain[i+1] + terrain[i-GW] + terrain[i+GW]) * 0.25;
+            terrain[i] += (avg - h) * SIM_FAULT_EROSION * boundaryProx;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Smooth stress field (fewer passes than generation — just remove noise) ──
+  for (let pass = 0; pass < 5; pass++) {
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        tectonicStress[i] = tectonicStress[i] * 0.5 +
+          (tectonicStress[i-1] + tectonicStress[i+1] + tectonicStress[i-GW] + tectonicStress[i+GW]) * 0.125;
+      }
+    }
+  }
+
+  // ── Earthquakes: release accumulated transform stress ──
+  for (let y = 2; y < GH - 2; y++) {
+    for (let x = 2; x < GW - 2; x++) {
+      const i = y * GW + x;
+      if (faultStress[i] > SIM_QUAKE_THRESHOLD) {
+        // Earthquake! Sudden terrain displacement + roughening
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const ni = (y+dy) * GW + (x+dx);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 2.5) continue;
+            const intensity = (1 - dist/3) * 0.01;
+            // Random-ish displacement based on position
+            const jitter = simplex2D(x * 0.5 + year * 0.001, y * 0.5) * intensity;
+            terrain[ni] += jitter;
+            terrain[ni] = Math.min(0.98, terrain[ni]);
+          }
+        }
+        faultStress[i] = 0; // reset after quake
+      }
+    }
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN LOOP
@@ -677,6 +2152,7 @@ const offCtx    = offCanvas.getContext('2d');
 let lastRender = 0;
 const TARGET_FPS = 30;
 const FRAME_MS   = 1000 / TARGET_FPS;
+let stepsSinceOxbowCheck = 0;
 
 function loop(ts) {
   requestAnimationFrame(loop);
@@ -688,22 +2164,71 @@ function loop(ts) {
   let maxDepth = 0;
 
   for (let s = 0; s < steps; s++) {
+    // Tectonic step (slow — every N sim steps)
+    stepsSinceTectonics++;
+    if (stepsSinceTectonics >= TECTONIC_INTERVAL) {
+      stepTectonics();
+      stepsSinceTectonics = 0;
+    }
+
     maxDepth = stepHydraulic();
     stepErosion();
     year += YEARS_PER_STEP;
+    stepsSinceOxbowCheck++;
   }
 
-  render(maxDepth);
+  if (stepsSinceOxbowCheck > 50) {
+    detectOxbows();
+    stepsSinceOxbowCheck = 0;
+  }
+
+  // Recompute hydraulic head every frame (cheap BFS, critical for flow direction)
+  computeHydraulicHead();
+
+  if (viewMode === '3d') {
+    render3D();
+  } else {
+    render(maxDepth);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// UI INTERACTIONS
+// UI
 // ═══════════════════════════════════════════════════════════════════
 function togglePlay() {
   running = !running;
   const btn = document.getElementById('btn-play');
-  btn.textContent = running ? '⏸ Pause' : '▶ Play';
+  btn.textContent = running ? '\u23F8 Pause' : '\u25B6 Play';
   btn.classList.toggle('active', running);
+}
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('btn-view-terrain').classList.toggle('active', mode === 'terrain');
+  document.getElementById('btn-view-height').classList.toggle('active', mode === 'height');
+  document.getElementById('btn-view-exposed').classList.toggle('active', mode === 'exposed');
+  document.getElementById('btn-view-3d').classList.toggle('active', mode === '3d');
+
+  // Toggle canvas visibility
+  document.getElementById('c').classList.toggle('hidden-2d', mode === '3d');
+  document.getElementById('c3d').classList.toggle('active-3d', mode === '3d');
+
+  if (mode === '3d') init3D();
+  updateLegend();
+}
+
+function updateLegend() {
+  document.getElementById('legend-terrain').style.display = (viewMode === 'terrain' && !showLayers) ? '' : 'none';
+  document.getElementById('legend-height').style.display = viewMode === 'height' ? '' : 'none';
+  document.getElementById('legend-exposed').style.display = viewMode === 'exposed' ? '' : 'none';
+  document.getElementById('legend-layers').style.display = showLayers ? '' : 'none';
+}
+
+function toggleContours() {
+  showContours = !showContours;
+  const btn = document.getElementById('btn-contours');
+  btn.textContent = showContours ? 'ON' : 'OFF';
+  btn.classList.toggle('active', showContours);
 }
 
 function toggleLayers() {
@@ -711,6 +2236,7 @@ function toggleLayers() {
   const btn = document.getElementById('btn-layers');
   btn.textContent = showLayers ? 'ON' : 'OFF';
   btn.classList.toggle('active', showLayers);
+  updateLegend();
 }
 
 function togglePressure() {
@@ -731,37 +2257,499 @@ function toggleVelocity() {
   document.getElementById('btn-pressure').classList.remove('active');
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// DEV PANEL — real-time tuning
+// ═══════════════════════════════════════════════════════════════════
+const DEV_BINDINGS = [
+  ['dev-gravity',  v => SIM_GRAVITY = v,      'dev-gravity-val'],
+  ['dev-dt',       v => SIM_DT = v,           'dev-dt-val'],
+  ['dev-spring',   v => SIM_SPRING_RATE = v,  'dev-spring-val'],
+  ['dev-evap',     v => SIM_EVAP = v,         'dev-evap-val'],
+  ['dev-absorb',   v => SIM_ABSORB = v,       'dev-absorb-val'],
+  ['dev-kc',       v => SIM_Kc = v,           'dev-kc-val'],
+  ['dev-ks',       v => SIM_Ks = v,           'dev-ks-val'],
+  ['dev-kd',       v => SIM_Kd = v,           'dev-kd-val'],
+  ['dev-kt',       v => SIM_Kt = v,           'dev-kt-val'],
+  ['dev-tspeed',   v => SIM_TECTONIC_SPEED = v, 'dev-tspeed-val'],
+  ['dev-uplift',   v => SIM_UPLIFT_RATE = v, 'dev-uplift-val'],
+  ['dev-rift',     v => SIM_RIFT_RATE = v, 'dev-rift-val'],
+  ['dev-quake',    v => SIM_QUAKE_THRESHOLD = v, 'dev-quake-val'],
+  ['dev-ferode',   v => SIM_FAULT_EROSION = v, 'dev-ferode-val'],
+  ['dev-hscale',   v => SIM_HEIGHT_SCALE = v, 'dev-hscale-val'],
+  ['dev-wthresh',  v => SIM_WATER_THRESH = v, 'dev-wthresh-val'],
+  ['dev-pw',       v => SIM_PRESSURE_WT = v,  'dev-pw-val'],
+];
+
+DEV_BINDINGS.forEach(([id, setter, valId]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    setter(v);
+    document.getElementById(valId).textContent = v < 0.01 ? v.toFixed(4) : v < 1 ? v.toFixed(3) : v.toFixed(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GENERATION MODAL
+// ═══════════════════════════════════════════════════════════════════
+function showGenModal() {
+  running = false;
+  document.getElementById('btn-play').textContent = '\u25B6 Play';
+  document.getElementById('btn-play').classList.remove('active');
+
+  document.getElementById('gen-seed').value = Math.floor(Math.random() * 99999);
+  document.getElementById('gen-mapsize').value = genMapSize;
+  document.getElementById('gen-octaves').value = genOctaves;
+  document.getElementById('gen-valley').value = Math.round(genValley * 100);
+  document.getElementById('gen-roughness').value = Math.round(genRoughness * 100);
+  document.getElementById('gen-mtn-height').value = Math.round(genMtnHeight * 100);
+  document.getElementById('gen-sea-level').value = Math.round(genSeaLevel * 100);
+  document.getElementById('gen-rainfall').value = Math.round(genRainfall / RAINFALL_MAX * 100);
+
+  // Set active terrain type button
+  document.querySelectorAll('.gen-type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === genTerrainType);
+  });
+
+  updateGenLabels();
+  document.getElementById('gen-overlay').classList.remove('hidden');
+}
+
+function hideGenModal() {
+  document.getElementById('gen-overlay').classList.add('hidden');
+}
+
+function updateGenLabels() {
+  document.getElementById('gen-mapsize-val').textContent = document.getElementById('gen-mapsize').value;
+  document.getElementById('gen-octaves-val').textContent = document.getElementById('gen-octaves').value;
+  document.getElementById('gen-valley-val').textContent = document.getElementById('gen-valley').value;
+  document.getElementById('gen-roughness-val').textContent = document.getElementById('gen-roughness').value;
+  document.getElementById('gen-mtn-height-val').textContent = document.getElementById('gen-mtn-height').value;
+  document.getElementById('gen-sea-level-val').textContent = document.getElementById('gen-sea-level').value;
+  document.getElementById('gen-rainfall-val').textContent = document.getElementById('gen-rainfall').value;
+}
+
+function generateFromModal() {
+  currentSeed    = parseInt(document.getElementById('gen-seed').value) || 0;
+  genMapSize     = parseInt(document.getElementById('gen-mapsize').value) || 200;
+  genOctaves     = parseInt(document.getElementById('gen-octaves').value);
+  genValley      = parseInt(document.getElementById('gen-valley').value) / 100;
+  genRoughness   = parseInt(document.getElementById('gen-roughness').value) / 100;
+  genMtnHeight   = parseInt(document.getElementById('gen-mtn-height').value) / 100;
+  genSeaLevel    = parseInt(document.getElementById('gen-sea-level').value) / 100;
+  genRainfall    = parseInt(document.getElementById('gen-rainfall').value) / 100 * RAINFALL_MAX;
+  genTerrainType = document.querySelector('.gen-type-btn.active').dataset.type;
+  genForceOcean  = document.getElementById('gen-force-ocean').checked;
+  const startWater = document.getElementById('gen-water').checked;
+
+  hideGenModal();
+  initSim(startWater);
+  running = true;
+  document.getElementById('btn-play').textContent = '\u23F8 Pause';
+  document.getElementById('btn-play').classList.add('active');
+}
+
+// Wire up modal sliders
+['gen-mapsize','gen-octaves','gen-valley','gen-roughness','gen-mtn-height','gen-sea-level','gen-rainfall'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateGenLabels);
+});
+
+// Wire up terrain type buttons
+document.querySelectorAll('.gen-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.gen-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// Close modal on overlay click
+document.getElementById('gen-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('gen-overlay')) hideGenModal();
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// CANVAS INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
 canvas.addEventListener('click', (e) => {
-  if (!terrain) return;
-  const gx = (e.clientX / CELL_PX) | 0;
-  const gy = (e.clientY / CELL_PX) | 0;
+  if (!terrain || isPanning) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / canvas.width;
+  const my = (e.clientY - rect.top) / canvas.height;
+  const viewSize = SIM_SIZE / camZoom;
+  const gx = (camX + mx * viewSize) | 0;
+  const gy = (camY + my * viewSize) | 0;
   if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) return;
 
   if (e.shiftKey) {
-    // Add obstruction: raise terrain
+    sources.push({ gx, gy, rate: 0.06 });
+  } else {
     for (let dy = -3; dy <= 3; dy++) {
       for (let dx = -3; dx <= 3; dx++) {
         const ix = gx + dx, iy = gy + dy;
         if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
-        const d = Math.sqrt(dx*dx+dy*dy);
-        if (d <= 3) terrain[iy * GW + ix] = Math.min(0.95, terrain[iy * GW + ix] + 0.12 * (1 - d/3));
+        const dd = Math.sqrt(dx*dx+dy*dy);
+        if (dd <= 3) terrain[iy * GW + ix] = Math.max(0.01, terrain[iy * GW + ix] - 0.08 * (1 - dd/3));
       }
     }
-  } else {
-    // Add water source
-    sources.push({ gx, gy, rate: 0.06 });
   }
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// RESIZE
+// RESIZE + BOOT
 // ═══════════════════════════════════════════════════════════════════
 function resize() {
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-  offCanvas.width  = Math.ceil(canvas.width  / CELL_PX);
-  offCanvas.height = Math.ceil((canvas.height - UI_H) / CELL_PX);
-  initSim();
+  const maxSize = Math.min(window.innerWidth, window.innerHeight - UI_H);
+  canvas.width  = maxSize;
+  canvas.height = maxSize;
+  c3d.width = maxSize;
+  c3d.height = maxSize;
+
+  if (!terrain) {
+    currentSeed = Math.floor(Math.random() * 99999);
+    initSim(true);
+    return;
+  }
+  if (glInited) { gl.viewport(0, 0, maxSize, maxSize); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// WEBGL 3D VIEW
+// ═══════════════════════════════════════════════════════════════════
+const c3d = document.getElementById('c3d');
+let gl = null;
+let glProgram = null;
+let glBuffers = null;
+let glInited = false;
+
+// Orbit camera
+let orbitTheta = Math.PI * 0.25;  // horizontal angle
+let orbitPhi = Math.PI * 0.35;    // vertical angle (0=top, PI/2=side)
+let orbitDist = 2.2;
+let orbitDragging = false;
+let orbitLastX = 0, orbitLastY = 0;
+
+const VERT_SRC = `
+attribute vec3 aPos;
+attribute vec3 aColor;
+attribute float aWater;
+uniform mat4 uMVP;
+uniform float uHeightScale;
+uniform float uSeaLevel;
+varying vec3 vColor;
+varying vec3 vNormal;
+varying float vWater;
+varying float vHeight;
+void main() {
+  vec3 pos = aPos;
+  pos.y *= uHeightScale;
+  vColor = aColor;
+  vWater = aWater;
+  vHeight = aPos.y;
+  // Normal will be computed in fragment from derivatives
+  vNormal = vec3(0, 1, 0); // placeholder
+  gl_Position = uMVP * vec4(pos, 1.0);
+}`;
+
+const FRAG_SRC = `
+precision mediump float;
+varying vec3 vColor;
+varying vec3 vNormal;
+varying float vWater;
+varying float vHeight;
+void main() {
+  // Compute screen-space normal from derivatives for lighting
+  vec3 dx = dFdx(vec3(gl_FragCoord.xy, vHeight * 50.0));
+  vec3 dy = dFdy(vec3(gl_FragCoord.xy, vHeight * 50.0));
+  vec3 normal = normalize(cross(dx, dy));
+
+  // Directional light from upper-left
+  vec3 lightDir = normalize(vec3(0.4, 0.7, 0.3));
+  float diffuse = max(dot(normal, lightDir), 0.0);
+  float lighting = 0.35 + 0.65 * diffuse;
+
+  vec3 terrainCol = vColor * lighting;
+
+  // Water overlay
+  if (vWater > 0.002) {
+    float depth = min(vWater / 0.04, 1.0);
+    float alpha = 0.4 + depth * 0.5;
+    vec3 waterCol = mix(vec3(0.08, 0.32, 0.75), vec3(0.05, 0.18, 0.55), depth);
+    waterCol *= lighting;
+    terrainCol = mix(terrainCol, waterCol, alpha);
+  }
+
+  gl_FragColor = vec4(terrainCol, 1.0);
+}`;
+
+function init3D() {
+  if (glInited) return;
+
+  const maxSize = Math.min(window.innerWidth, window.innerHeight - UI_H);
+  c3d.width = maxSize;
+  c3d.height = maxSize;
+
+  gl = c3d.getContext('webgl', { antialias: true });
+  if (!gl) { alert('WebGL not supported'); return; }
+
+  // Enable derivatives extension for screen-space normals
+  gl.getExtension('OES_standard_derivatives');
+
+  // Compile shaders
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, VERT_SRC);
+  gl.compileShader(vs);
+  if (!gl.getShaderInfoLog(vs) === '') console.log(gl.getShaderInfoLog(vs));
+
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, '#extension GL_OES_standard_derivatives : enable\n' + FRAG_SRC);
+  gl.compileShader(fs);
+  if (!gl.getShaderInfoLog(fs) === '') console.log(gl.getShaderInfoLog(fs));
+
+  glProgram = gl.createProgram();
+  gl.attachShader(glProgram, vs);
+  gl.attachShader(glProgram, fs);
+  gl.linkProgram(glProgram);
+
+  if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
+    console.error('Shader link error:', gl.getProgramInfoLog(glProgram));
+    return;
+  }
+
+  // Create index buffer (static — triangle topology doesn't change)
+  const indices = [];
+  for (let y = 0; y < GH - 1; y++) {
+    for (let x = 0; x < GW - 1; x++) {
+      const i = y * GW + x;
+      indices.push(i, i + 1, i + GW);
+      indices.push(i + 1, i + GW + 1, i + GW);
+    }
+  }
+
+  const indexBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+  // Need OES_element_index_uint for >65k vertices
+  gl.getExtension('OES_element_index_uint');
+
+  // Create vertex buffers (dynamic — updated each frame)
+  const posBuf = gl.createBuffer();
+  const colorBuf = gl.createBuffer();
+  const waterBuf = gl.createBuffer();
+
+  glBuffers = { indexBuf, posBuf, colorBuf, waterBuf, indexCount: indices.length };
+
+  // Camera controls on 3D canvas
+  c3d.addEventListener('mousedown', (e) => {
+    orbitDragging = true;
+    orbitLastX = e.clientX;
+    orbitLastY = e.clientY;
+    c3d.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!orbitDragging) return;
+    const dx = e.clientX - orbitLastX;
+    const dy = e.clientY - orbitLastY;
+    orbitLastX = e.clientX;
+    orbitLastY = e.clientY;
+    orbitTheta -= dx * 0.008;
+    orbitPhi = Math.max(0.1, Math.min(Math.PI * 0.48, orbitPhi - dy * 0.008));
+  });
+  window.addEventListener('mouseup', () => {
+    orbitDragging = false;
+    c3d.style.cursor = 'grab';
+  });
+  c3d.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    orbitDist *= e.deltaY > 0 ? 1.08 : 0.92;
+    orbitDist = Math.max(0.5, Math.min(6, orbitDist));
+  }, { passive: false });
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.clearColor(0.05, 0.07, 0.09, 1);
+
+  glInited = true;
+}
+
+function render3D() {
+  if (!gl || !glBuffers || !terrain) return;
+
+  const N = GW * GH;
+  const positions = new Float32Array(N * 3);
+  const colors = new Float32Array(N * 3);
+  const waters = new Float32Array(N);
+
+  // Build vertex data
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const i = y * GW + x;
+      const fx = x / GW - 0.5;  // center on origin, range [-0.5, 0.5]
+      const fz = y / GH - 0.5;
+      const h = terrain[i];
+      const w = waterSmooth ? waterSmooth[i] : water[i];
+      // Use water surface height if water is present (shows lakes/rivers as raised surface)
+      const displayH = w > 0.002 ? Math.max(h, h + w) : h;
+
+      positions[i * 3]     = fx;
+      positions[i * 3 + 1] = displayH;
+      positions[i * 3 + 2] = fz;
+
+      // Elevation color (same as 2D)
+      const c = elevColor(h);
+      colors[i * 3]     = c[0] / 255;
+      colors[i * 3 + 1] = c[1] / 255;
+      colors[i * 3 + 2] = c[2] / 255;
+
+      waters[i] = waterSmooth ? waterSmooth[i] : water[i];
+    }
+  }
+
+  // Upload buffers
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.colorBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.waterBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, waters, gl.DYNAMIC_DRAW);
+
+  // Set up shader
+  gl.useProgram(glProgram);
+
+  // Attribute: position
+  const aPos = gl.getAttribLocation(glProgram, 'aPos');
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.posBuf);
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+  // Attribute: color
+  const aColor = gl.getAttribLocation(glProgram, 'aColor');
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.colorBuf);
+  gl.enableVertexAttribArray(aColor);
+  gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+  // Attribute: water
+  const aWater = gl.getAttribLocation(glProgram, 'aWater');
+  gl.bindBuffer(gl.ARRAY_BUFFER, glBuffers.waterBuf);
+  gl.enableVertexAttribArray(aWater);
+  gl.vertexAttribPointer(aWater, 1, gl.FLOAT, false, 0, 0);
+
+  // Index buffer
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, glBuffers.indexBuf);
+
+  // Camera: orbit around center
+  const cx = Math.sin(orbitPhi) * Math.sin(orbitTheta) * orbitDist;
+  const cy = Math.cos(orbitPhi) * orbitDist;
+  const cz = Math.sin(orbitPhi) * Math.cos(orbitTheta) * orbitDist;
+
+  const mvp = mat4Multiply(
+    mat4Perspective(45, c3d.width / c3d.height, 0.01, 10),
+    mat4LookAt(cx, cy, cz, 0, 0.3, 0, 0, 1, 0)
+  );
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(glProgram, 'uMVP'), false, mvp);
+  gl.uniform1f(gl.getUniformLocation(glProgram, 'uHeightScale'), SIM_HEIGHT_SCALE);
+  gl.uniform1f(gl.getUniformLocation(glProgram, 'uSeaLevel'), seaLevel);
+
+  // Draw
+  gl.viewport(0, 0, c3d.width, c3d.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.drawElements(gl.TRIANGLES, glBuffers.indexCount, gl.UNSIGNED_INT, 0);
+}
+
+// ── Minimal matrix math (no library needed) ──
+function mat4Perspective(fovDeg, aspect, near, far) {
+  const f = 1 / Math.tan(fovDeg * Math.PI / 360);
+  const nf = 1 / (near - far);
+  return new Float32Array([
+    f/aspect, 0, 0, 0,
+    0, f, 0, 0,
+    0, 0, (far+near)*nf, -1,
+    0, 0, 2*far*near*nf, 0
+  ]);
+}
+
+function mat4LookAt(ex,ey,ez, tx,ty,tz, ux,uy,uz) {
+  let zx=ex-tx, zy=ey-ty, zz=ez-tz;
+  let zl=Math.sqrt(zx*zx+zy*zy+zz*zz); zx/=zl; zy/=zl; zz/=zl;
+  let xx=uy*zz-uz*zy, xy=uz*zx-ux*zz, xz=ux*zy-uy*zx;
+  let xl=Math.sqrt(xx*xx+xy*xy+xz*xz); xx/=xl; xy/=xl; xz/=xl;
+  let yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+  return new Float32Array([
+    xx, yx, zx, 0,
+    xy, yy, zy, 0,
+    xz, yz, zz, 0,
+    -(xx*ex+xy*ey+xz*ez), -(yx*ex+yy*ey+yz*ez), -(zx*ex+zy*ey+zz*ez), 1
+  ]);
+}
+
+function mat4Multiply(a, b) {
+  const o = new Float32Array(16);
+  for (let i = 0; i < 4; i++)
+    for (let j = 0; j < 4; j++)
+      o[j*4+i] = a[i]*b[j*4]+a[i+4]*b[j*4+1]+a[i+8]*b[j*4+2]+a[i+12]*b[j*4+3];
+  return o;
+}
+
+// ZOOM & PAN
+// ═══════════════════════════════════════════════════════════════════
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let panStartCamX = 0, panStartCamY = 0;
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+  const oldZoom = camZoom;
+  camZoom = Math.max(1, Math.min(20, camZoom * zoomFactor));
+
+  // Zoom toward mouse position
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / canvas.width;
+  const my = (e.clientY - rect.top) / canvas.height;
+  const oldView = SIM_SIZE / oldZoom;
+  const newView = SIM_SIZE / camZoom;
+  camX += (oldView - newView) * mx;
+  camY += (oldView - newView) * my;
+  clampCam();
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    // Middle-click or Alt+click: pan
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartCamX = camX;
+    panStartCamY = camY;
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  const viewSize = SIM_SIZE / camZoom;
+  const dx = (e.clientX - panStartX) / canvas.width * viewSize;
+  const dy = (e.clientY - panStartY) / canvas.height * viewSize;
+  camX = panStartCamX - dx;
+  camY = panStartCamY - dy;
+  clampCam();
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'crosshair';
+  }
+});
+
+function clampCam() {
+  const viewSize = SIM_SIZE / camZoom;
+  camX = Math.max(0, Math.min(SIM_SIZE - viewSize, camX));
+  camY = Math.max(0, Math.min(SIM_SIZE - viewSize, camY));
 }
 
 window.addEventListener('resize', resize);
