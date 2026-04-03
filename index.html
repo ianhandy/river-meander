@@ -429,6 +429,12 @@
     <span class="dev-val" id="dev-ferode-val">0.010</span>
   </div>
 
+  <div class="dev-row">
+    <label>Slope Collapse <span class="dev-help" title="How aggressively steep slopes erode. Simulates rockfall and landslides above the angle of repose. 0=off, 30=default, 100=instant collapse.">?</span></label>
+    <input type="range" id="dev-slope" min="0" max="100" step="1" value="30">
+    <span class="dev-val" id="dev-slope-val">30</span>
+  </div>
+
   <div class="dev-row" style="margin-top:4px">
     <label>Fault Lines <span class="dev-help" title="Overlay showing plate boundaries. Red = convergent (mountains), blue = divergent (rifts), yellow = transform (quakes).">?</span></label>
     <button id="btn-faults" onclick="showFaultLines=!showFaultLines; this.textContent=showFaultLines?'ON':'OFF'; this.classList.toggle('active',showFaultLines)">OFF</button>
@@ -634,6 +640,7 @@ let SIM_UPLIFT_RATE = 0.0008;   // mountain building rate at convergent boundari
 let SIM_RIFT_RATE = 0.0004;     // valley formation rate at divergent boundaries
 let SIM_QUAKE_THRESHOLD = 2.0;  // transform stress threshold for earthquake
 let SIM_FAULT_EROSION = 0.01;   // extra erosion rate at fault zones
+let SIM_SLOPE_COLLAPSE = 30;   // how aggressively steep slopes collapse (0=off, 30=default)
 let showFaultLines = false;     // debug overlay for tectonic boundaries
 
 // ═══════════════════════════════════════════════════════════════════
@@ -901,7 +908,7 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   let mn = Infinity, mx = -Infinity;
   for (let i = 0; i < N; i++) { if (t[i] < mn) mn = t[i]; if (t[i] > mx) mx = t[i]; }
   const range = mx - mn || 1;
-  for (let i = 0; i < N; i++) t[i] = 0.03 + (t[i] - mn) / range * 0.94;
+  for (let i = 0; i < N; i++) t[i] = (t[i] - mn) / range;
 
   // ── Step 2b: Force ocean in at least one corner ──
   if (forceOcean) {
@@ -1103,7 +1110,7 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   let mn2 = Infinity, mx2 = -Infinity;
   for (let i = 0; i < N; i++) { if (t[i] < mn2) mn2 = t[i]; if (t[i] > mx2) mx2 = t[i]; }
   const range2 = mx2 - mn2 || 1;
-  for (let i = 0; i < N; i++) t[i] = 0.03 + (t[i] - mn2) / range2 * 0.94;
+  for (let i = 0; i < N; i++) t[i] = (t[i] - mn2) / range2;
 
   hardnessNoise = hn;
   initialFlowAccum = flowAccum;
@@ -1585,12 +1592,11 @@ function stepErosion() {
       const speed = Math.sqrt(vx * vx + vy * vy);
       if (speed < 0.005) continue; // stagnant water does NOT erode
 
-      // Skip basin bottoms: if this cell is a local minimum in terrain,
-      // water is converging here, not flowing through. No erosion.
-      // This prevents the "shower drain" effect where one cell erodes
-      // into a hole and all water rushes down it.
-      if (terrain[i] <= terrain[i-1] && terrain[i] <= terrain[i+1] &&
-          terrain[i] <= terrain[i-GW] && terrain[i] <= terrain[i+GW]) continue;
+      // Skip convergent flow: if more water flows IN than OUT, this cell is
+      // filling (basin/pool), not draining. No erosion — prevents shower drain effect.
+      const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
+      const totalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
+      if (totalOut < totalIn * 0.7) continue; // convergent — water pooling, not flowing through
       // Pressure amplifies erosion only when water is already flowing.
       // Deep fast river = very erosive. Deep still pool = zero erosion.
       // Slope factor: steeper terrain erodes much faster (waterfalls, canyon heads)
@@ -1663,7 +1669,15 @@ function stepErosion() {
       const h = terrain[i];
       const tSum = (terrain[i-1] - h) + (terrain[i+1] - h)
                  + (terrain[i-GW] - h) + (terrain[i+GW] - h);
-      terrain[i] += SIM_Kt * tSum * 0.25;
+      // Slope-dependent erosion: gentle slopes are stable, steep slopes collapse
+      // like rockfall and landslides above the angle of repose
+      const maxDiff = Math.max(
+        Math.abs(terrain[i-1] - h), Math.abs(terrain[i+1] - h),
+        Math.abs(terrain[i-GW] - h), Math.abs(terrain[i+GW] - h)
+      );
+      const steepness = Math.max(0, maxDiff - 0.02); // threshold ~angle of repose
+      const collapseRate = SIM_Kt * (1 + steepness * SIM_SLOPE_COLLAPSE);
+      terrain[i] += collapseRate * tSum * 0.25;
       // No hard floor — inland basins can go below sea level (e.g., Dead Sea)
     }
   }
@@ -2094,7 +2108,7 @@ function stepTectonics() {
           terrain[i] += SIM_RIFT_RATE * convergence * boundaryProx;
         }
         // Soft clamp top only — mountains slow down, but no floor on basins
-        if (terrain[i] > 0.96) terrain[i] = 0.96 + (terrain[i] - 0.96) * 0.1;
+        // No height cap — let mountains grow freely
 
         // Transform zones: accumulate fault stress (smooth threshold)
         if (tangent > 0.1 && boundaryProx > 0.05) {
@@ -2137,7 +2151,7 @@ function stepTectonics() {
             // Random-ish displacement based on position
             const jitter = simplex2D(x * 0.5 + year * 0.001, y * 0.5) * intensity;
             terrain[ni] += jitter;
-            terrain[ni] = Math.min(0.98, terrain[ni]);
+            // no cap
           }
         }
         faultStress[i] = 0; // reset after quake
@@ -2270,6 +2284,7 @@ const DEV_BINDINGS = [
   ['dev-ks',       v => SIM_Ks = v,           'dev-ks-val'],
   ['dev-kd',       v => SIM_Kd = v,           'dev-kd-val'],
   ['dev-kt',       v => SIM_Kt = v,           'dev-kt-val'],
+  ['dev-slope',    v => SIM_SLOPE_COLLAPSE = v, 'dev-slope-val'],
   ['dev-tspeed',   v => SIM_TECTONIC_SPEED = v, 'dev-tspeed-val'],
   ['dev-uplift',   v => SIM_UPLIFT_RATE = v, 'dev-uplift-val'],
   ['dev-rift',     v => SIM_RIFT_RATE = v, 'dev-rift-val'],
