@@ -19,14 +19,12 @@ export function stepErosion() {
       if (water[i] < MIN_WATER) continue;
       if (isOceanCell[i]) continue;
 
-      const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5;
-      const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5;
+      // Velocity = flux / depth (consistent with hydraulics)
+      const wd = Math.max(water[i], 0.001);
+      const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5 / wd;
+      const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5 / wd;
       const speed = Math.sqrt(vx * vx + vy * vy);
-      if (speed < 0.005) continue;
-
-      const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
-      const totalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
-      if (totalOut < totalIn * 0.3) continue;
+      if (speed < 0.001) continue; // only truly stagnant water skipped
 
       const dhdx = (terrain[i+1] - terrain[i-1]) * 0.5;
       const dhdy = (terrain[i+GW] - terrain[i-GW]) * 0.5;
