@@ -146,6 +146,35 @@ export function stepErosion() {
     }
   }
 
+  // ── Beach sand equalization — sand can't hold height over neighbors ──
+  // Reads from snapshot to prevent cascade. Beach cells aggressively
+  // level with neighboring beach cells (sand slumps flat).
+  {
+    const tSnap2 = terrain.slice();
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        const beach = getBeachiness(i);
+        if (beach < 0.1) continue;
+
+        const h = tSnap2[i];
+        const nb = [i-1, i+1, i-GW, i+GW];
+        let sumH = h, count = 1;
+        for (const ni of nb) {
+          if (getBeachiness(ni) > 0.1) {
+            sumH += tSnap2[ni];
+            count++;
+          }
+        }
+        if (count <= 1) continue;
+
+        // Sand equalizes strongly — 40% blend toward average per step
+        const avgH = sumH / count;
+        terrain[i] += (avgH - h) * 0.4 * beach;
+      }
+    }
+  }
+
   // ── Directional slope collapse (rockfall / talus) ──
   // Steep slopes shed material from the top. Debris falls to the base
   // and fans out laterally — forming talus slopes and scree fields.
@@ -236,6 +265,20 @@ export function stepErosion() {
     }
   }
   sediment.set(tmpSed);
+
+  // Beach deposition — sediment carried by water drops onto beach sand.
+  // Water slows down on absorbent sand, loses carrying capacity.
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      const beach = getBeachiness(i);
+      if (beach < 0.1 || sediment[i] < 1e-5) continue;
+      // Drop sediment proportional to beachiness
+      const drop = sediment[i] * beach * 0.3;
+      terrain[i] += drop;
+      sediment[i] -= drop;
+    }
+  }
 
   // Hydrostatic pressure erosion — pooled water erodes the weakest barrier.
   // Concentrates on the single lowest/softest rim cell (not all 4 equally).
