@@ -110,6 +110,10 @@ function initSim(startWithWater) {
   document.getElementById('yr').textContent = '0';
   document.getElementById('seed-display').textContent = s.currentSeed;
   document.getElementById('max-depth').textContent = '0.0';
+  const yr2 = document.getElementById('yr2');
+  const sd2 = document.getElementById('seed-display2');
+  if (yr2) yr2.textContent = '0';
+  if (sd2) sd2.textContent = s.currentSeed;
 
   // Reset 3D if initialized (index buffer depends on grid size)
   s.glInited = false;
@@ -150,6 +154,8 @@ function loop(ts) {
 
   document.getElementById('yr').textContent = Math.round(state.year).toLocaleString();
   document.getElementById('max-depth').textContent = (maxDepth * 100).toFixed(1);
+  const yr2el = document.getElementById('yr2');
+  if (yr2el) yr2el.textContent = Math.round(state.year).toLocaleString();
 
   if (state.viewMode === '3d') {
     render3D(c3d);

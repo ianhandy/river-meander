@@ -121,12 +121,12 @@ export function stepHydraulic() {
           saturation[i] = Math.max(0, saturation[i] - 0.001);
         }
 
+        // Edge drain: water exits the map at all edges
         if (x === 0 || x === GW - 1 || y === 0 || y === GH - 1) {
           if (isOceanCell[i]) {
-            const edgeTarget = Math.max(0, seaLevel - terrain[i]);
-            if (water[i] > edgeTarget) {
-              water[i] -= (water[i] - edgeTarget) * 0.6;
-            }
+            water[i] = Math.max(0, seaLevel - terrain[i]);
+          } else {
+            water[i] *= 0.7; // non-ocean edges drain 30% per step
           }
         }
       }
