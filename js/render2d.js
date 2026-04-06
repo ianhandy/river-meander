@@ -2,7 +2,7 @@
 
 import state from './state.js';
 import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from './constants.js';
-import { lerp, sampleGridFast, elevColor } from './math.js';
+import { lerp, sampleGrid, sampleGridFast, elevColor } from './math.js';
 import { layerColor } from './helpers.js';
 
 export function render(canvas, ctx, maxDepth) {

@@ -163,11 +163,9 @@ export function render3D(c3d) {
       const fx = x / GW - 0.5;
       const fz = y / GH - 0.5;
       const h = terrain[i];
-      const w = waterSmooth ? waterSmooth[i] : water[i];
-      const displayH = w > 0.002 ? Math.max(h, h + w) : h;
 
       positions[i * 3]     = fx;
-      positions[i * 3 + 1] = displayH;
+      positions[i * 3 + 1] = h;
       positions[i * 3 + 2] = fz;
 
       const c = elevColor(h);

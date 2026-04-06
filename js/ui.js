@@ -11,6 +11,10 @@ export function togglePlay() {
   const btn = document.getElementById('btn-play');
   btn.textContent = state.running ? '\u23F8 Pause' : '\u25B6 Play';
   btn.classList.toggle('active', state.running);
+  const btn2 = document.getElementById('btn-play2');
+  if (btn2) {
+    btn2.textContent = state.running ? '\u23F8' : '\u25B6';
+  }
 }
 
 export function setView(mode, c3d) {
@@ -97,6 +101,11 @@ const DEV_BINDINGS = [
   ['dev-move-evap',   'SIM_MOVING_EVAP',    'dev-move-evap-val'],
   ['dev-move-absorb', 'SIM_MOVING_ABSORB',  'dev-move-absorb-val'],
   ['dev-viscous',     'SIM_VISCOUS_DAMPING', 'dev-viscous-val'],
+  ['dev-lat-stag',    'SIM_LATERAL_STAGNANT','dev-lat-stag-val'],
+  ['dev-lat-move',    'SIM_LATERAL_MOVING',  'dev-lat-move-val'],
+  ['dev-talus-noise', 'SIM_TALUS_NOISE',     'dev-talus-noise-val'],
+  ['dev-repose-min',  'SIM_REPOSE_MIN',      'dev-repose-min-val'],
+  ['dev-repose-max',  'SIM_REPOSE_MAX',      'dev-repose-max-val'],
 ];
 
 const DEV_HTML_DEFAULTS = {};
@@ -123,8 +132,16 @@ function saveDevSettings() {
   localStorage.setItem('riverMeanderDev', JSON.stringify(settings));
 }
 
+const SETTINGS_VERSION = 7; // bump to invalidate stale localStorage
+
 function loadDevSettings() {
   try {
+    const ver = parseInt(localStorage.getItem('riverMeanderDevVer') || '0');
+    if (ver < SETTINGS_VERSION) {
+      localStorage.removeItem('riverMeanderDev');
+      localStorage.setItem('riverMeanderDevVer', SETTINGS_VERSION);
+      return;
+    }
     const saved = JSON.parse(localStorage.getItem('riverMeanderDev') || '{}');
     DEV_BINDINGS.forEach(([id, key, valId]) => {
       if (saved[id] !== undefined) applyDevValue(id, key, valId, saved[id]);
@@ -215,10 +232,14 @@ export function initUI(c3d) {
     if (el) BAR_DEFAULTS[id] = el.value;
   });
 
-  // Wire up dev panel sliders
+  // Wire up dev panel sliders + tick buttons
   DEV_BINDINGS.forEach(([id, key, valId]) => {
     const el = document.getElementById(id);
     if (!el) return;
+    const step = parseFloat(el.step) || 1;
+    const min = parseFloat(el.min);
+    const max = parseFloat(el.max);
+
     // Set initial state from HTML default
     state[key] = parseFloat(el.value);
     document.getElementById(valId).textContent = formatDevVal(parseFloat(el.value));
@@ -229,6 +250,35 @@ export function initUI(c3d) {
       document.getElementById(valId).textContent = formatDevVal(v);
       saveDevSettings();
     });
+
+    // Add up/down tick buttons after the value display
+    const valEl = document.getElementById(valId);
+    if (!valEl) return;
+    const ticks = document.createElement('div');
+    ticks.className = 'dev-ticks';
+    const btnUp = document.createElement('button');
+    btnUp.className = 'dev-tick';
+    btnUp.textContent = '▲';
+    btnUp.tabIndex = -1;
+    const btnDown = document.createElement('button');
+    btnDown.className = 'dev-tick';
+    btnDown.textContent = '▼';
+    btnDown.tabIndex = -1;
+
+    const nudge = (dir) => {
+      const cur = parseFloat(el.value);
+      const next = Math.max(min, Math.min(max, +(cur + step * dir).toPrecision(10)));
+      el.value = next;
+      state[key] = next;
+      valEl.textContent = formatDevVal(next);
+      saveDevSettings();
+    };
+    btnUp.addEventListener('click', (e) => { e.stopPropagation(); nudge(1); });
+    btnDown.addEventListener('click', (e) => { e.stopPropagation(); nudge(-1); });
+
+    ticks.appendChild(btnUp);
+    ticks.appendChild(btnDown);
+    valEl.parentNode.insertBefore(ticks, valEl.nextSibling);
   });
 
   // Click-to-edit numeric values
@@ -275,6 +325,8 @@ export function initUI(c3d) {
 
   // Wire button events (replacing inline onclick)
   document.getElementById('btn-play').addEventListener('click', togglePlay);
+  const btnPlay2 = document.getElementById('btn-play2');
+  if (btnPlay2) btnPlay2.addEventListener('click', togglePlay);
   document.getElementById('btn-view-terrain').addEventListener('click', () => setView('terrain', c3d));
   document.getElementById('btn-view-height').addEventListener('click', () => setView('height', c3d));
   document.getElementById('btn-view-exposed').addEventListener('click', () => setView('exposed', c3d));
@@ -306,6 +358,37 @@ export function initUI(c3d) {
 
   // Reset all defaults button
   document.getElementById('dev-panel').querySelector('button').addEventListener('click', () => resetAllDefaults(c3d));
+
+  // Dev presets — shift+click to save, click to load
+  document.querySelectorAll('.dev-preset').forEach(btn => {
+    const idx = btn.dataset.preset;
+    const key = 'riverMeanderPreset' + idx;
+    // Check if preset has saved data
+    if (localStorage.getItem(key)) btn.classList.add('has-data');
+
+    btn.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        // Save current slider values
+        const settings = {};
+        DEV_BINDINGS.forEach(([id]) => {
+          const el = document.getElementById(id);
+          if (el) settings[id] = el.value;
+        });
+        localStorage.setItem(key, JSON.stringify(settings));
+        btn.classList.add('has-data');
+      } else {
+        // Load preset
+        try {
+          const saved = JSON.parse(localStorage.getItem(key) || '{}');
+          if (Object.keys(saved).length === 0) return;
+          DEV_BINDINGS.forEach(([id, stateKey, valId]) => {
+            if (saved[id] !== undefined) applyDevValue(id, stateKey, valId, saved[id]);
+          });
+          saveDevSettings();
+        } catch(e) {}
+      }
+    });
+  });
 
   // Dev help tooltips
   let activeHelpPopup = null;

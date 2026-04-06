@@ -19,7 +19,7 @@ export function showGenModal() {
   document.getElementById('gen-roughness').value = Math.round(state.genRoughness * 100);
   document.getElementById('gen-mtn-height').value = Math.round(state.genMtnHeight * 100);
   document.getElementById('gen-sea-level').value = Math.round(state.genSeaLevel * 100);
-  document.getElementById('gen-rainfall').value = Math.round(state.genRainfall / RAINFALL_MAX * 100);
+  document.getElementById('gen-rainfall').value = state.genRainfall;
   document.getElementById('gen-plates').value = state.genNumPlates;
   document.getElementById('gen-erosion-passes').value = state.genErosionPasses;
 
@@ -56,7 +56,7 @@ function generateFromModal() {
   state.genRoughness   = parseInt(document.getElementById('gen-roughness').value) / 100;
   state.genMtnHeight   = parseInt(document.getElementById('gen-mtn-height').value) / 100;
   state.genSeaLevel    = parseInt(document.getElementById('gen-sea-level').value) / 100;
-  state.genRainfall    = parseInt(document.getElementById('gen-rainfall').value) / 100 * RAINFALL_MAX;
+  state.genRainfall    = parseInt(document.getElementById('gen-rainfall').value);
   state.genTerrainType = document.querySelector('.gen-type-btn.active').dataset.type;
   state.genNumPlates   = parseInt(document.getElementById('gen-plates').value) || 0;
   state.genErosionPasses = parseFloat(document.getElementById('gen-erosion-passes').value);
@@ -184,6 +184,8 @@ export function applyTestPreset() {
 export function initModal() {
   // New button
   document.getElementById('btn-new').addEventListener('click', showGenModal);
+  const btnNew2 = document.getElementById('btn-new2');
+  if (btnNew2) btnNew2.addEventListener('click', showGenModal);
 
   // Preset buttons
   document.getElementById('btn-river-preset').addEventListener('click', applyRiverPreset);

@@ -16,7 +16,7 @@
     height: 100vh;
     overflow: hidden;
   }
-  canvas { display: block; cursor: grab; border: 1px solid #1b1f25; border-radius: 2px; }
+  canvas { display: block; cursor: grab; border: 1px solid #1b1f25; border-radius: 2px; image-rendering: auto; }
 
   /* ── Shared ── */
   .panel {
@@ -57,8 +57,7 @@
 
   /* ── Top-left: seed + world info ── */
   #info-panel {
-    position: fixed; top: 10px; left: 10px;
-    display: flex; flex-direction: column; gap: 6px;
+    display: none;
   }
   #world-info {
     display: flex; align-items: center; gap: 8px;
@@ -94,17 +93,20 @@
   .view-pills button:first-child { border-radius: 4px 0 0 4px; border-left: 1px solid #21262d; }
   .view-pills button:last-child { border-radius: 0 4px 4px 0; }
 
-  /* ── Legend ── */
+  /* ── Legend — anchored to bottom-right of canvas ── */
   #legend {
-    position: fixed; top: 52px; left: 10px;
-    background: rgba(13,17,23,0.5);
+    position: fixed;
+    right: 10px; bottom: 50px;
+    background: rgba(13,17,23,0.7);
     border: 1px solid #1b1f25;
-    border-radius: 5px;
+    border-radius: 5px 0 0 5px;
+    border-right: none;
     padding: 5px 8px;
     font-size: 8px;
     line-height: 1.6;
     color: #3d434a;
     pointer-events: none;
+    z-index: 5;
   }
   #legend.hidden { opacity: 0; }
   .lrow { display: flex; align-items: center; gap: 4px; }
@@ -230,6 +232,13 @@
     border-radius: 3px; color: #58a6ff; font-size: 8px;
     font-family: inherit; text-align: right; padding: 1px 3px; outline: none;
   }
+  .dev-preset {
+    padding: 3px 0; font-size: 7px; font-family: inherit;
+    background: #161b22; border: 1px solid #21262d; color: #484f58;
+    border-radius: 3px; cursor: pointer; text-align: center;
+  }
+  .dev-preset:hover { background: #21262d; color: #8b949e; }
+  .dev-preset.has-data { border-color: #1f6feb; color: #58a6ff; }
   .dev-help {
     display: inline-flex; align-items: center; justify-content: center;
     width: 12px; height: 12px; border-radius: 50%;
@@ -237,6 +246,23 @@
     font-size: 7px; font-weight: 700; cursor: help;
     flex-shrink: 0; margin-left: 1px;
   }
+  .dev-ticks { display: flex; flex-direction: column; gap: 0; flex-shrink: 0; margin-left: 1px; }
+  .dev-tick {
+    background: none; border: none; color: #30363d; font-size: 7px;
+    cursor: pointer; padding: 0; line-height: 1; width: 10px; height: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dev-tick:hover { color: #58a6ff; }
+  /* Collapsible sub-groups */
+  .dev-subgroup { margin-left: 6px; border-left: 1px solid #1b1f25; padding-left: 6px; overflow: hidden; max-height: 0; transition: max-height .2s ease; }
+  .dev-subgroup.open { max-height: 200px; }
+  .dev-sub-toggle {
+    font-size: 7px; color: #30363d; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 3px; margin: 2px 0 1px 2px;
+  }
+  .dev-sub-toggle:hover { color: #58a6ff; }
+  .dev-sub-toggle::before { content: '▸'; font-size: 7px; transition: transform .15s; }
+  .dev-sub-toggle.open::before { transform: rotate(90deg); }
   .dev-help-popup {
     position: fixed; background: #1c2128; border: 1px solid #388bfd;
     border-radius: 5px; padding: 7px 9px; font-size: 10px;
@@ -274,25 +300,38 @@
   }
   #source-editor button:hover { background: #3d1e1e; }
 
-  /* ── Toolbar ── */
-  #toolbar {
-    position: fixed; top: 50%; left: 10px;
-    transform: translateY(-50%);
-    background: rgba(13,17,23,0.7);
+  /* ── Tool panel (top-left) ── */
+  #tool-panel {
+    position: fixed; top: 10px; left: 10px;
+    background: rgba(13,17,23,0.94);
+    backdrop-filter: blur(14px);
     border: 1px solid #1b1f25;
-    border-radius: 6px; padding: 5px;
-    z-index: 15; display: flex; flex-direction: column; gap: 4px;
+    border-radius: 7px; padding: 8px 10px;
+    z-index: 15; font-size: 9px; color: #6e7681;
+    min-width: 140px;
   }
+  #tool-panel h4 {
+    font-size: 8px; color: #3d6fa5; margin: 0 0 5px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tool-btns { display: flex; gap: 3px; margin-bottom: 6px; }
+  .tool-btn {
+    flex: 1; padding: 4px 0; text-align: center;
+    background: #161b22; border: 1px solid #21262d; border-radius: 4px;
+    color: #6e7681; font-size: 8px; font-family: inherit; cursor: pointer;
+  }
+  .tool-btn:hover { background: #21262d; }
+  .tool-btn.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+  .tool-row { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+  .tool-row label { min-width: 38px; font-size: 8px; color: #484f58; }
+  .tool-row input[type=range] { flex: 1; }
+  .tool-row .tool-val { min-width: 24px; text-align: right; font-size: 8px; color: #58a6ff; font-variant-numeric: tabular-nums; }
+
+  /* Legacy toolbar hidden */
+  #toolbar { display: none; }
   #toolbar.hidden { display: none; }
-  .tool-item {
-    width: 30px; height: 30px;
-    background: #161b22; border: 1px solid #21262d; border-radius: 5px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: grab; font-size: 13px; color: #58a6ff;
-    user-select: none;
-  }
-  .tool-item:hover { background: #21262d; }
-  .tool-label { font-size: 7px; color: #484f58; text-align: center; }
+  .tool-item { display: none; }
+  .tool-label { display: none; }
   #drag-ghost {
     position: fixed; pointer-events: none; z-index: 100;
     width: 22px; height: 22px; border-radius: 50%;
@@ -397,7 +436,39 @@
   <button id="btn-toolbar" style="display:none">Tools</button>
 </div>
 
-<!-- ── Floating panels ── -->
+<!-- ── Tool panel (top-left) ── -->
+<div id="tool-panel">
+  <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px">
+    <div class="stat">Seed <span id="seed-display2"></span></div>
+    <div class="stat">Yr <span id="yr2"></span></div>
+    <button id="btn-play2" style="font-size:9px;padding:2px 8px">&#x23F8;</button>
+    <button id="btn-new2" style="font-size:9px;padding:2px 8px">New</button>
+  </div>
+  <h4>Tools</h4>
+  <div class="tool-btns">
+    <button class="tool-btn" id="tbtn-pan" title="Pan view">Pan</button>
+    <button class="tool-btn" id="tbtn-carve" title="Carve / raise terrain">Carve</button>
+    <button class="tool-btn" id="tbtn-flow" title="Place water source">Source</button>
+  </div>
+  <div id="carve-opts" style="display:none">
+    <div class="tool-btns" style="margin-bottom:4px">
+      <button class="tool-btn active" id="tbtn-subtract" title="Lower terrain">Dig</button>
+      <button class="tool-btn" id="tbtn-add" title="Raise terrain">Raise</button>
+    </div>
+    <div class="tool-row">
+      <label>Size</label>
+      <input type="range" id="carve-size" min="1" max="15" step="1" value="3">
+      <span class="tool-val" id="carve-size-val">3</span>
+    </div>
+    <div class="tool-row">
+      <label>Strength</label>
+      <input type="range" id="carve-strength" min="1" max="100" step="1" value="40">
+      <span class="tool-val" id="carve-strength-val">40</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Legacy (kept for JS compat) ── -->
 <div id="toolbar" class="hidden">
   <div class="tool-item" id="tool-source" title="Drag to place source">&#x1F4A7;</div>
   <div class="tool-label">Source</div>
@@ -414,6 +485,14 @@
 <!-- ── Dev panel ── -->
 <button id="dev-toggle">&#9881;</button>
 <div id="dev-panel" class="hidden">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:5px">
+    <button class="dev-preset" data-preset="0">Preset 1</button>
+    <button class="dev-preset" data-preset="1">Preset 2</button>
+    <button class="dev-preset" data-preset="2">Preset 3</button>
+    <button class="dev-preset" data-preset="3">Preset 4</button>
+    <button class="dev-preset" data-preset="4">Preset 5</button>
+    <button class="dev-preset" data-preset="5">Preset 6</button>
+  </div>
   <div style="margin-bottom:5px">
     <button style="width:100%;padding:3px;font-size:7px;background:#161b22;border:1px solid #21262d;color:#484f58;border-radius:3px;cursor:pointer;font-family:inherit">Reset All Defaults</button>
   </div>
@@ -435,7 +514,7 @@
   </div>
   <div class="dev-row">
     <label>Flow Rate</label>
-    <input type="range" id="flow-rate" min="1" max="100" value="40">
+    <input type="range" id="flow-rate" min="1" max="500" value="40">
   </div>
 
   <h4>Flow Physics</h4>
@@ -451,74 +530,90 @@
   </div>
   <div class="dev-row">
     <label>Spring Rate <span class="dev-help" title="Water produced per source per step.">?</span></label>
-    <input type="range" id="dev-spring" min="0.001" max="0.05" step="0.001" value="0.003">
-    <span class="dev-val" id="dev-spring-val">0.003</span>
+    <input type="range" id="dev-spring" min="0.001" max="0.1" step="0.001" value="0.02">
+    <span class="dev-val" id="dev-spring-val">0.020</span>
   </div>
   <div class="dev-row">
     <label>Viscous Damp <span class="dev-help" title="Flux momentum. Lower = water slows faster.">?</span></label>
-    <input type="range" id="dev-viscous" min="0.80" max="0.99" step="0.01" value="0.93">
-    <span class="dev-val" id="dev-viscous-val">0.93</span>
+    <input type="range" id="dev-viscous" min="0.80" max="0.99" step="0.01" value="0.98">
+    <span class="dev-val" id="dev-viscous-val">0.98</span>
   </div>
 
-  <h4>Water Loss &mdash; Still</h4>
+  <h4>Water Loss</h4>
   <div class="dev-row">
     <label>Evaporation <span class="dev-help" title="Surface water loss from thin films.">?</span></label>
-    <input type="range" id="dev-evap" min="0" max="0.005" step="0.0001" value="0.0005">
-    <span class="dev-val" id="dev-evap-val">0.0005</span>
+    <input type="range" id="dev-evap" min="0" max="0.005" step="0.0001" value="0.002">
+    <span class="dev-val" id="dev-evap-val">0.0020</span>
   </div>
   <div class="dev-row">
     <label>Absorption <span class="dev-help" title="Water soaking into ground.">?</span></label>
     <input type="range" id="dev-absorb" min="0" max="0.01" step="0.0002" value="0.001">
     <span class="dev-val" id="dev-absorb-val">0.0010</span>
   </div>
-  <div class="dev-row">
-    <label>Stag Evap <span class="dev-help" title="Evap multiplier for stagnant water.">?</span></label>
-    <input type="range" id="dev-stag-evap" min="0" max="5" step="0.1" value="2.0">
-    <span class="dev-val" id="dev-stag-evap-val">2.0</span>
-  </div>
-  <div class="dev-row">
-    <label>Stag Absorb <span class="dev-help" title="Absorption multiplier for still water.">?</span></label>
-    <input type="range" id="dev-stag-absorb" min="0" max="2" step="0.05" value="0.9">
-    <span class="dev-val" id="dev-stag-absorb-val">0.90</span>
-  </div>
-
-  <h4>Water Loss &mdash; Moving</h4>
-  <div class="dev-row">
-    <label>Move Evap <span class="dev-help" title="Evap baseline for flowing water.">?</span></label>
-    <input type="range" id="dev-move-evap" min="0" max="1" step="0.01" value="0.05">
-    <span class="dev-val" id="dev-move-evap-val">0.05</span>
-  </div>
-  <div class="dev-row">
-    <label>Move Absorb <span class="dev-help" title="Absorption baseline for flowing water.">?</span></label>
-    <input type="range" id="dev-move-absorb" min="0" max="1" step="0.01" value="0.05">
-    <span class="dev-val" id="dev-move-absorb-val">0.05</span>
+  <div class="dev-sub-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">Stagnant / Moving</div>
+  <div class="dev-subgroup">
+    <div class="dev-row">
+      <label>Still Evap <span class="dev-help" title="Evap multiplier for stagnant water. Pools and puddles evaporate faster.">?</span></label>
+      <input type="range" id="dev-stag-evap" min="0" max="5" step="0.1" value="3.0">
+      <span class="dev-val" id="dev-stag-evap-val">3.0</span>
+    </div>
+    <div class="dev-row">
+      <label>Still Absorb <span class="dev-help" title="Absorption multiplier for stagnant water. Still water soaks in faster.">?</span></label>
+      <input type="range" id="dev-stag-absorb" min="0" max="2" step="0.05" value="2.0">
+      <span class="dev-val" id="dev-stag-absorb-val">2.00</span>
+    </div>
+    <div class="dev-row">
+      <label>Flow Evap <span class="dev-help" title="Evap baseline for flowing water. Rivers evaporate less than pools.">?</span></label>
+      <input type="range" id="dev-move-evap" min="0" max="1" step="0.01" value="0.1">
+      <span class="dev-val" id="dev-move-evap-val">0.100</span>
+    </div>
+    <div class="dev-row">
+      <label>Flow Absorb <span class="dev-help" title="Absorption baseline for flowing water. Fast rivers resist soaking in.">?</span></label>
+      <input type="range" id="dev-move-absorb" min="0" max="1" step="0.01" value="0.05">
+      <span class="dev-val" id="dev-move-absorb-val">0.050</span>
+    </div>
   </div>
 
   <h4>Erosion</h4>
   <div class="dev-row">
     <label>Capacity <span class="dev-help" title="Sediment transport capacity.">?</span></label>
-    <input type="range" id="dev-kc" min="0.01" max="0.5" step="0.01" value="0.18">
-    <span class="dev-val" id="dev-kc-val">0.18</span>
+    <input type="range" id="dev-kc" min="0.01" max="0.5" step="0.01" value="0.15">
+    <span class="dev-val" id="dev-kc-val">0.15</span>
   </div>
   <div class="dev-row">
     <label>Erosion <span class="dev-help" title="Base erosion rate, divided by hardness.">?</span></label>
-    <input type="range" id="dev-ks" min="0.01" max="0.3" step="0.01" value="0.12">
-    <span class="dev-val" id="dev-ks-val">0.120</span>
+    <input type="range" id="dev-ks" min="0.01" max="0.3" step="0.01" value="0.08">
+    <span class="dev-val" id="dev-ks-val">0.080</span>
   </div>
   <div class="dev-row">
     <label>Deposition <span class="dev-help" title="Rate sediment settles to terrain.">?</span></label>
-    <input type="range" id="dev-kd" min="0.001" max="0.05" step="0.001" value="0.015">
-    <span class="dev-val" id="dev-kd-val">0.015</span>
+    <input type="range" id="dev-kd" min="0.001" max="0.05" step="0.001" value="0.02">
+    <span class="dev-val" id="dev-kd-val">0.020</span>
   </div>
   <div class="dev-row">
     <label>Smoothing <span class="dev-help" title="Passive thermal erosion.">?</span></label>
-    <input type="range" id="dev-kt" min="0" max="0.03" step="0.001" value="0.008">
-    <span class="dev-val" id="dev-kt-val">0.008</span>
+    <input type="range" id="dev-kt" min="0" max="0.03" step="0.001" value="0.005">
+    <span class="dev-val" id="dev-kt-val">0.005</span>
   </div>
   <div class="dev-row">
     <label>Slope Collapse <span class="dev-help" title="Rockfall above angle of repose.">?</span></label>
-    <input type="range" id="dev-slope" min="0" max="100" step="1" value="30">
-    <span class="dev-val" id="dev-slope-val">30</span>
+    <input type="range" id="dev-slope" min="0" max="100" step="1" value="5">
+    <span class="dev-val" id="dev-slope-val">5</span>
+  </div>
+  <div class="dev-row">
+    <label>Talus Noise <span class="dev-help" title="Randomness of rockslide debris distribution. 0 = uniform, 100 = very chaotic.">?</span></label>
+    <input type="range" id="dev-talus-noise" min="0" max="100" step="1" value="80">
+    <span class="dev-val" id="dev-talus-noise-val">80</span>
+  </div>
+  <div class="dev-row">
+    <label>Repose Min <span class="dev-help" title="Minimum angle of repose (height diff per cell). Below this, slopes are stable.">?</span></label>
+    <input type="range" id="dev-repose-min" min="0.001" max="0.1" step="0.001" value="0.04">
+    <span class="dev-val" id="dev-repose-min-val">0.040</span>
+  </div>
+  <div class="dev-row">
+    <label>Repose Max <span class="dev-help" title="Maximum angle of repose. Each cell gets a random threshold between min and max — creates varied cliff stability.">?</span></label>
+    <input type="range" id="dev-repose-max" min="0.001" max="0.1" step="0.001" value="0.10">
+    <span class="dev-val" id="dev-repose-max-val">0.100</span>
   </div>
   <div class="dev-row">
     <label>Vert Erode</label>
@@ -528,25 +623,38 @@
   <h4>Meander</h4>
   <div class="dev-row">
     <label>Asymmetry <span class="dev-help" title="Outer/inner bank erosion ratio.">?</span></label>
-    <input type="range" id="dev-asymmetry" min="1" max="6" step="0.1" value="3.0">
-    <span class="dev-val" id="dev-asymmetry-val">3.0</span>
+    <input type="range" id="dev-asymmetry" min="1" max="6" step="0.1" value="2.0">
+    <span class="dev-val" id="dev-asymmetry-val">2.0</span>
   </div>
   <div class="dev-row">
     <label>Lateral Rate <span class="dev-help" title="Bank erosion strength.">?</span></label>
-    <input type="range" id="dev-lateral" min="0.2" max="4" step="0.1" value="1.5">
+    <input type="range" id="dev-lateral" min="0.2" max="20" step="0.1" value="1.5">
     <span class="dev-val" id="dev-lateral-val">1.5</span>
+  </div>
+  <div class="dev-sub-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">Still / Flowing</div>
+  <div class="dev-subgroup">
+    <div class="dev-row">
+      <label>Still Lateral <span class="dev-help" title="Lateral erosion multiplier for stagnant water. Pools slowly widen their banks.">?</span></label>
+      <input type="range" id="dev-lat-stag" min="0" max="2" step="0.05" value="0.1">
+      <span class="dev-val" id="dev-lat-stag-val">0.10</span>
+    </div>
+    <div class="dev-row">
+      <label>Flow Lateral <span class="dev-help" title="Lateral erosion multiplier for flowing water. Rivers cut wider channels.">?</span></label>
+      <input type="range" id="dev-lat-move" min="0" max="3" step="0.05" value="1.0">
+      <span class="dev-val" id="dev-lat-move-val">1.00</span>
+    </div>
   </div>
 
   <h4>Tectonics</h4>
   <div class="dev-row">
     <label>Plate Speed <span class="dev-help" title="Tectonic drift speed.">?</span></label>
-    <input type="range" id="dev-tspeed" min="0" max="1.0" step="0.01" value="0.15">
-    <span class="dev-val" id="dev-tspeed-val">0.15</span>
+    <input type="range" id="dev-tspeed" min="0" max="1.0" step="0.01" value="0.0">
+    <span class="dev-val" id="dev-tspeed-val">0.0</span>
   </div>
   <div class="dev-row">
     <label>Uplift Rate <span class="dev-help" title="Mountain building at convergent boundaries.">?</span></label>
-    <input type="range" id="dev-uplift" min="0" max="0.005" step="0.0001" value="0.0008">
-    <span class="dev-val" id="dev-uplift-val">0.0008</span>
+    <input type="range" id="dev-uplift" min="0" max="0.005" step="0.0001" value="0.005">
+    <span class="dev-val" id="dev-uplift-val">0.005</span>
   </div>
   <div class="dev-row">
     <label>Rift Rate <span class="dev-help" title="Valley formation at divergent boundaries.">?</span></label>
@@ -572,13 +680,13 @@
   </div>
   <div class="dev-row">
     <label>Water Thresh <span class="dev-help" title="Min water depth to render.">?</span></label>
-    <input type="range" id="dev-wthresh" min="0.0001" max="0.02" step="0.0001" value="0.0001">
-    <span class="dev-val" id="dev-wthresh-val">0.0001</span>
+    <input type="range" id="dev-wthresh" min="0.0001" max="0.02" step="0.0001" value="0.001">
+    <span class="dev-val" id="dev-wthresh-val">0.0010</span>
   </div>
   <div class="dev-row">
     <label>Pressure Wt <span class="dev-help" title="Water depth contribution to erosion.">?</span></label>
-    <input type="range" id="dev-pw" min="0" max="1.0" step="0.05" value="0.4">
-    <span class="dev-val" id="dev-pw-val">0.40</span>
+    <input type="range" id="dev-pw" min="0" max="1.0" step="0.05" value="0.3">
+    <span class="dev-val" id="dev-pw-val">0.30</span>
   </div>
 </div>
 
@@ -609,8 +717,8 @@
     </div>
     <div class="gen-row">
       <label>Map Size</label>
-      <input type="range" id="gen-mapsize" min="25" max="350" step="25" value="25">
-      <span class="gen-val" id="gen-mapsize-val">25</span>
+      <input type="range" id="gen-mapsize" min="25" max="350" step="25" value="200">
+      <span class="gen-val" id="gen-mapsize-val">200</span>
     </div>
     <div class="gen-sep">Terrain</div>
     <div class="gen-row"><label>Smoothness</label><input type="range" id="gen-octaves" min="2" max="8" value="6"><span class="gen-val" id="gen-octaves-val">6</span></div>
@@ -621,7 +729,7 @@
     <div class="gen-row"><label>Plates</label><input type="range" id="gen-plates" min="3" max="15" value="0"><span class="gen-val" id="gen-plates-val">auto</span></div>
     <div class="gen-row"><label>Erosion Detail</label><input type="range" id="gen-erosion-passes" min="0" max="3" step="0.5" value="1"><span class="gen-val" id="gen-erosion-passes-val">1.0</span></div>
     <div class="gen-sep">Water</div>
-    <div class="gen-row"><label>Rainfall</label><input type="range" id="gen-rainfall" min="0" max="100" value="0"><span class="gen-val" id="gen-rainfall-val">0</span></div>
+    <div class="gen-row"><label>Rainfall</label><input type="range" id="gen-rainfall" min="0" max="100" value="20"><span class="gen-val" id="gen-rainfall-val">20</span></div>
     <div class="gen-check"><input type="checkbox" id="gen-force-ocean" checked><label for="gen-force-ocean">Force ocean corner</label></div>
     <div class="gen-check"><input type="checkbox" id="gen-water"><label for="gen-water">Start with water sources</label></div>
     <button id="gen-go">Generate</button>
