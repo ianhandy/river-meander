@@ -244,13 +244,14 @@ export function stepErosion() {
 
       const waterSurface = terrain[i] + water[i];
 
-      // Find the weakest barrier: the neighbor that's easiest to erode through
-      // Score = terrain height * hardness (lower = weaker = erodes first)
+      // Find the weakest barrier: neighbor terrain above water surface that's
+      // easiest to erode through. Score = height above water * hardness.
       let bestNi = -1, bestScore = Infinity;
       for (const ni of [i-1, i+1, i-GW, i+GW]) {
-        if (water[ni] > water[i]) continue; // not a barrier if it has more water
-        if (terrain[ni] <= terrain[i]) continue; // not a barrier if it's lower
-        const score = terrain[ni] * getHardness(ni);
+        if (terrain[ni] <= waterSurface) continue; // not blocking — water can already flow over
+        // How much does this barrier stick up above the water?
+        const excess = terrain[ni] - waterSurface;
+        const score = excess * getHardness(ni);
         if (score < bestScore) { bestScore = score; bestNi = ni; }
       }
       if (bestNi < 0) continue;
