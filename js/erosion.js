@@ -31,27 +31,25 @@ export function stepErosion() {
       const dhdy = (terrain[i+GW] - terrain[i-GW]) * 0.5;
       const slope = Math.sqrt(dhdx * dhdx + dhdy * dhdy);
 
-      // ── Erosion bonuses ──
-      // 1. Speed bonus: faster water erodes more (quadratic — double speed = 4x erosion)
+      // ── Erosion bonuses (split: some vertical-only, some lateral-only) ──
+
+      // Speed bonus: faster water erodes more (applies to vertical — fast flow cuts down)
       const speedBonus = 1.0 + speed * speed * 20;
 
-      // 2. Downhill bonus: steeper terrain = more erosive power
+      // Downhill bonus: steeper terrain = more lateral erosive power (LATERAL ONLY)
+      // Gravity pulls material sideways off steep slopes, not straight down
       const slopeFactor = 1.0 + slope * 25;
 
-      // 3. Low elevation bonus: lower terrain water has more accumulated energy
+      // Low elevation bonus: lower water has accumulated energy (LATERAL ONLY)
       const elevFactor = 1.0 + Math.max(0, seaLevel + 0.3 - terrain[i]) * 3;
 
-      // 4. Pressure system: inflow vs outflow balance
-      //    in > out = water backing up = push through terrain
-      //    in == out = steady flow = consistent erosion
-      //    in < out = draining = stagnating, less erosion
+      // Pressure system: inflow vs outflow balance (applies to both)
       const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
       const totalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
       const flowBalance = totalOut > 0.0001 ? totalIn / totalOut : 1;
-      // balance > 1 = accumulating (pressure builds), = 1 = steady, < 1 = draining
       const pressureFactor = flowBalance > 1 ? 1 + (flowBalance - 1) * 2 : flowBalance;
 
-      // 5. Volume pressure: deep water = more weight pushing down
+      // Volume pressure: deep water pushes down (applies to vertical only)
       const volumePressure = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
 
       // Curvature: magnitude + sign
@@ -72,25 +70,28 @@ export function stepErosion() {
         }
       }
 
-      let erosionForce = speedBonus * volumePressure * slopeFactor * elevFactor
-                        * pressureFactor * curvatureFactor;
+      // Vertical force: speed + volume pressure (fast flowing water cuts down)
+      const vertForce = speedBonus * volumePressure * pressureFactor * curvatureFactor;
+      // Lateral force: slope + elevation + curvature (gravity and accumulated energy widen)
+      const latForce = slopeFactor * elevFactor * pressureFactor * curvatureFactor;
 
-      // Beach sand is stable — waves don't carve channels through it
+      // Beach reduction
       const beach = getBeachiness(i);
-      if (beach > 0) erosionForce *= (1 - beach * 0.9); // up to 90% erosion reduction
+      const beachDamp = beach > 0 ? (1 - beach * 0.9) : 1;
 
       const localH = getHardness(i);
       const Ks_eff = SIM_Ks * erodSlider / localH;
+      // Capacity uses the average of both forces
+      const erosionForce = (vertForce + latForce) * 0.5;
       const C_eq = SIM_Kc * erosionForce * Math.sqrt(water[i]);
 
       if (C_eq > sediment[i]) {
         const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.015);
-        // Vertical/lateral split adapts to flow: fast narrow flow cuts down,
-        // slow wide flow cuts sideways. This creates the channel feedback loop.
-        const speedFactor = Math.min(1, speed * 5); // 0-1, high when fast
-        const vertSplit = SIM_VERTICAL_EROSION ? (0.3 + speedFactor * 0.4) : 0; // 30-70% vertical
-        const verticalDelta = delta * vertSplit;
-        const lateralDelta = delta * (1 - vertSplit);
+        // Split by relative force strength — stronger force gets more share
+        const vertShare = vertForce / (vertForce + latForce + 0.001);
+        const vertSplit = SIM_VERTICAL_EROSION ? vertShare : 0;
+        const verticalDelta = delta * vertSplit * beachDamp;
+        const lateralDelta = delta * (1 - vertSplit) * beachDamp;
 
         // Channel depth limit scales with water volume — more water = deeper channel allowed
         const maxChannelDepth = 0.02 + Math.min(0.15, water[i] * 3);
