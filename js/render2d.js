@@ -23,16 +23,14 @@ export function render(canvas, ctx, maxDepth) {
     state.waterSmooth = new Float32Array(N);
   }
 
-  // Pre-smooth water
+  // Light water smoothing — one pass, mostly preserves shape
   state.waterSmooth.set(water);
   const ws = state.waterSmooth;
-  for (let pass = 0; pass < 2; pass++) {
-    for (let y = 1; y < GH - 1; y++) {
-      for (let x = 1; x < GW - 1; x++) {
-        const i = y * GW + x;
-        ws[i] = water[i] * 0.4 +
-          (ws[i-1] + ws[i+1] + ws[i-GW] + ws[i+GW]) * 0.15;
-      }
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      ws[i] = water[i] * 0.7 +
+        (water[i-1] + water[i+1] + water[i-GW] + water[i+GW]) * 0.075;
     }
   }
 
@@ -148,7 +146,9 @@ export function render(canvas, ctx, maxDepth) {
       // Water overlay
       if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : SIM_WATER_THRESH)) {
         const depth = Math.min(1, w / REF_DEPTH);
-        const alpha = Math.min(1, (0.4 + depth * 0.6)) * waterOpacityUI;
+        // Sharper water edges: steep alpha ramp near threshold
+        const edgeSharpness = Math.min(1, (w - SIM_WATER_THRESH) / (SIM_WATER_THRESH * 3));
+        const alpha = Math.min(1, edgeSharpness * (0.5 + depth * 0.5)) * waterOpacityUI;
 
         let wr, wg, wb;
         if (showPressure) {
