@@ -261,9 +261,11 @@ export function stepErosion() {
       const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
       const totalPressure = basePressure + trapped * 2.0;
 
-      // Random chance to erode — deeper water = higher probability
-      // Shallow pools rarely erode, deep lakes erode frequently
-      const erodeChance = Math.min(0.3, totalPressure * 0.05);
+      // Random chance to erode — scales with pressure AND barrier steepness
+      // Steep thin barriers break easier than wide gentle slopes
+      const barrierExcess = terrain[bestNi] - waterSurface;
+      const steepness = barrierExcess > 0 ? Math.min(1, barrierExcess * 20) : 0;
+      const erodeChance = Math.min(0.3, totalPressure * 0.05 * steepness);
       if (Math.random() > erodeChance) continue;
 
       // Erode the weakest barrier — harder material resists more
