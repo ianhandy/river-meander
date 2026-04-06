@@ -30,7 +30,29 @@ export function stepErosion() {
       const dhdx = (terrain[i+1] - terrain[i-1]) * 0.5;
       const dhdy = (terrain[i+GW] - terrain[i-GW]) * 0.5;
       const slope = Math.sqrt(dhdx * dhdx + dhdy * dhdy);
-      const slopeFactor = 1.0 + slope * 15;
+
+      // ── Erosion bonuses ──
+      // 1. Speed bonus: faster water erodes more (quadratic — double speed = 4x erosion)
+      const speedBonus = 1.0 + speed * speed * 20;
+
+      // 2. Downhill bonus: steeper terrain = more erosive power
+      const slopeFactor = 1.0 + slope * 25;
+
+      // 3. Low elevation bonus: lower terrain water has more accumulated energy
+      const elevFactor = 1.0 + Math.max(0, seaLevel + 0.3 - terrain[i]) * 3;
+
+      // 4. Pressure system: inflow vs outflow balance
+      //    in > out = water backing up = push through terrain
+      //    in == out = steady flow = consistent erosion
+      //    in < out = draining = stagnating, less erosion
+      const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
+      const totalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
+      const flowBalance = totalOut > 0.0001 ? totalIn / totalOut : 1;
+      // balance > 1 = accumulating (pressure builds), = 1 = steady, < 1 = draining
+      const pressureFactor = flowBalance > 1 ? 1 + (flowBalance - 1) * 2 : flowBalance;
+
+      // 5. Volume pressure: deep water = more weight pushing down
+      const volumePressure = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
 
       // Curvature: magnitude + sign
       const nvx = vx / speed, nvy = vy / speed;
@@ -50,8 +72,8 @@ export function stepErosion() {
         }
       }
 
-      const pressureBoost = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
-      let erosionForce = speed * pressureBoost * slopeFactor * curvatureFactor;
+      let erosionForce = speedBonus * volumePressure * slopeFactor * elevFactor
+                        * pressureFactor * curvatureFactor;
 
       // Beach sand is stable — waves don't carve channels through it
       const beach = getBeachiness(i);
@@ -307,21 +329,27 @@ export function stepErosion() {
       }
       if (bestNi < 0) continue;
 
-      // Pressure from water depth
+      // Pressure system: inflow vs outflow determines how hard water pushes
+      const hTotalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
+      const hTotalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
+      const hBalance = hTotalOut > 0.0001 ? hTotalIn / hTotalOut : (hTotalIn > 0.0001 ? 5 : 1);
+      // balance > 1 = accumulating = pushing hard. < 1 = draining = no push.
+      const accumulationPush = hBalance > 1 ? Math.min(3, hBalance) : 0;
+      if (accumulationPush < 0.1) continue; // draining or steady — no pressure erosion
+
       const basePressure = water[i] * SIM_GRAVITY;
       const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
-      const totalPressure = basePressure + trapped * 2.0;
+      const totalPressure = (basePressure + trapped * 2.0) * accumulationPush;
 
       // Random chance to erode — scales with pressure AND barrier steepness
-      // Steep thin barriers break easier than wide gentle slopes
       const barrierExcess = terrain[bestNi] - waterSurface;
       const steepness = barrierExcess > 0 ? Math.min(1, barrierExcess * 20) : 0;
-      const erodeChance = Math.min(0.3, totalPressure * 0.05 * steepness);
+      const erodeChance = Math.min(0.4, totalPressure * 0.08 * steepness);
       if (Math.random() > erodeChance) continue;
 
       // Erode the weakest barrier — harder material resists more
       const barrierH = getHardness(bestNi);
-      const erodeAmt = Math.min(SIM_Ks * erodSlider * totalPressure * 0.02 / barrierH, 0.002);
+      const erodeAmt = Math.min(SIM_Ks * erodSlider * totalPressure * 0.03 / barrierH, 0.003);
       if (erodeAmt > 0) {
         terrain[bestNi] -= erodeAmt;
         sediment[i] += erodeAmt; // mass conserved
