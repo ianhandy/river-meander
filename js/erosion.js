@@ -261,9 +261,14 @@ export function stepErosion() {
       const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
       const totalPressure = basePressure + trapped * 2.0;
 
+      // Random chance to erode — deeper water = higher probability
+      // Shallow pools rarely erode, deep lakes erode frequently
+      const erodeChance = Math.min(0.3, totalPressure * 0.05);
+      if (Math.random() > erodeChance) continue;
+
       // Erode the weakest barrier — harder material resists more
       const barrierH = getHardness(bestNi);
-      const erodeAmt = Math.min(SIM_Ks * erodSlider * totalPressure * 0.05 / barrierH, 0.005);
+      const erodeAmt = Math.min(SIM_Ks * erodSlider * totalPressure * 0.02 / barrierH, 0.002);
       if (erodeAmt > 0) {
         terrain[bestNi] -= erodeAmt;
         sediment[i] += erodeAmt; // mass conserved
