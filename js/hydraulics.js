@@ -33,7 +33,10 @@ export function stepHydraulic() {
   }
 
   // Pass 1: update outflow fluxes (pipe model)
-  // Pure water-surface differential — no terrain bias
+  // Two forces on water:
+  // 1. Surface pressure: water flows from high surface to low surface
+  // 2. Bed gravity: water weight on a slope creates a downhill pull
+  //    (proportional to water depth × bed slope in each direction)
   const damp = SIM_VISCOUS_DAMPING;
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
@@ -41,29 +44,42 @@ export function stepHydraulic() {
       fluxL[i] *= damp; fluxR[i] *= damp;
       fluxU[i] *= damp; fluxD[i] *= damp;
       const h = terrain[i] + water[i];
+      const w = water[i];
+
+      // Bed gravity: water's weight × terrain slope in each direction
+      // Only acts when there IS water (no phantom forces on dry cells)
+      const bedGrav = w > 0.0005 ? w * g * 0.3 : 0;
 
       if (x < GW - 1) {
-        fluxR[i] = Math.max(0, fluxR[i] + dt * g * (h - terrain[i+1] - water[i+1]));
+        const surfaceDiff = h - terrain[i+1] - water[i+1];
+        const bedSlope = terrain[i] - terrain[i+1]; // positive = downhill right
+        fluxR[i] = Math.max(0, fluxR[i] + dt * g * surfaceDiff + bedGrav * Math.max(0, bedSlope));
       } else {
-        fluxR[i] = Math.max(0, fluxR[i] + dt * g * water[i]);
+        fluxR[i] = Math.max(0, fluxR[i] + dt * g * w);
       }
 
       if (x > 0) {
-        fluxL[i] = Math.max(0, fluxL[i] + dt * g * (h - terrain[i-1] - water[i-1]));
+        const surfaceDiff = h - terrain[i-1] - water[i-1];
+        const bedSlope = terrain[i] - terrain[i-1];
+        fluxL[i] = Math.max(0, fluxL[i] + dt * g * surfaceDiff + bedGrav * Math.max(0, bedSlope));
       } else {
-        fluxL[i] = Math.max(0, fluxL[i] + dt * g * water[i]);
+        fluxL[i] = Math.max(0, fluxL[i] + dt * g * w);
       }
 
       if (y < GH - 1) {
-        fluxD[i] = Math.max(0, fluxD[i] + dt * g * (h - terrain[i+GW] - water[i+GW]));
+        const surfaceDiff = h - terrain[i+GW] - water[i+GW];
+        const bedSlope = terrain[i] - terrain[i+GW];
+        fluxD[i] = Math.max(0, fluxD[i] + dt * g * surfaceDiff + bedGrav * Math.max(0, bedSlope));
       } else {
-        fluxD[i] = Math.max(0, fluxD[i] + dt * g * water[i]);
+        fluxD[i] = Math.max(0, fluxD[i] + dt * g * w);
       }
 
       if (y > 0) {
-        fluxU[i] = Math.max(0, fluxU[i] + dt * g * (h - terrain[i-GW] - water[i-GW]));
+        const surfaceDiff = h - terrain[i-GW] - water[i-GW];
+        const bedSlope = terrain[i] - terrain[i-GW];
+        fluxU[i] = Math.max(0, fluxU[i] + dt * g * surfaceDiff + bedGrav * Math.max(0, bedSlope));
       } else {
-        fluxU[i] = Math.max(0, fluxU[i] + dt * g * water[i]);
+        fluxU[i] = Math.max(0, fluxU[i] + dt * g * w);
       }
 
       const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]) * dt;
