@@ -11,7 +11,8 @@ export function stepErosion() {
           SIM_Kc, SIM_Ks, SIM_Kd, SIM_Kt, SIM_PRESSURE_WT, SIM_GRAVITY,
           SIM_SLOPE_COLLAPSE, SIM_VERTICAL_EROSION,
           SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE,
-          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN } = state;
+          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN,
+          flowSpeed } = state;
   const erodSlider = erodibilityUI;
 
   for (let y = 1; y < GH - 1; y++) {
