@@ -71,39 +71,47 @@ export function stepErosion() {
         terrain[i] -= actualVertical;
         sediment[i] += actualVertical;
 
-        // Asymmetric lateral erosion (meander engine)
-        if (speed > 0.01 && lateralDelta > 0.00001) {
+        // Lateral erosion: two components
+        // 1. Depth-driven: deeper water erodes banks to widen the channel
+        // 2. Curvature-driven: bends erode outer bank (meander engine)
+        if (speed > 0.005 && lateralDelta > 0.00001) {
           const fnx = vx / speed, fny = vy / speed;
-          const curvMag = Math.min(1, Math.abs(curvatureSign) * curvatureFactor * 0.5);
-          const perpX = Math.round(fny), perpY = Math.round(fnx);
-          const lbx = x - perpX, lby = y + perpY;
-          const rbx = x + perpX, rby = y - perpY;
-          const outerRate = SIM_LATERAL_RATE * (1 + curvMag * (SIM_MEANDER_ASYMMETRY - 1));
+          const perpX = Math.round(-fny), perpY = Math.round(fnx);
+          const lbx = x + perpX, lby = y + perpY;
+          const rbx = x - perpX, rby = y - perpY;
 
+          // Depth-driven widening: deeper water = more bank pressure
+          const depthPressure = Math.min(1, water[i] * 20); // 0-1, saturates at depth 0.05
+
+          // Curvature-driven asymmetry (meander engine)
+          const curvMag = Math.min(1, Math.abs(curvatureSign) * curvatureFactor * 0.5);
+
+          // Erode both banks: base rate from depth, asymmetry from curvature
+          const baseRate = SIM_LATERAL_RATE * depthPressure;
+          const outerBoost = curvMag * (SIM_MEANDER_ASYMMETRY - 1);
+
+          // Left bank
           if (lbx >= 1 && lbx < GW-1 && lby >= 1 && lby < GH-1) {
             const bi = lby * GW + lbx;
-            const outerness = -curvatureSign;
-            if (outerness > 0.1 && terrain[bi] >= seaLevel) {
-              const eroded = lateralDelta * outerRate / getHardness(bi);
+            if (terrain[bi] > terrain[i] && terrain[bi] >= seaLevel) {
+              // Bank is higher than channel — erode it
+              const outerness = -curvatureSign;
+              const rate = baseRate * (1 + Math.max(0, outerness) * outerBoost);
+              const eroded = Math.min(lateralDelta * rate / getHardness(bi), 0.003);
               terrain[bi] -= eroded;
               sediment[i] += eroded;
-            } else if (outerness < -0.1 && water[bi] < MIN_WATER && sediment[i] > 0.0001) {
-              const dep = Math.min(lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2, sediment[i]);
-              terrain[bi] += dep;
-              sediment[i] -= dep;
             }
           }
+
+          // Right bank
           if (rbx >= 1 && rbx < GW-1 && rby >= 1 && rby < GH-1) {
             const bi = rby * GW + rbx;
-            const outerness = curvatureSign;
-            if (outerness > 0.1 && terrain[bi] >= seaLevel) {
-              const eroded = lateralDelta * outerRate / getHardness(bi);
+            if (terrain[bi] > terrain[i] && terrain[bi] >= seaLevel) {
+              const outerness = curvatureSign;
+              const rate = baseRate * (1 + Math.max(0, outerness) * outerBoost);
+              const eroded = Math.min(lateralDelta * rate / getHardness(bi), 0.003);
               terrain[bi] -= eroded;
               sediment[i] += eroded;
-            } else if (outerness < -0.1 && water[bi] < MIN_WATER && sediment[i] > 0.0001) {
-              const dep = Math.min(lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2, sediment[i]);
-              terrain[bi] += dep;
-              sediment[i] -= dep;
             }
           }
         }
