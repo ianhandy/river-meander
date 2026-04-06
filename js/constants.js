@@ -46,7 +46,7 @@ export const SIM_DEFAULTS = {
   SIM_GRAVITY: 10.0,
   SIM_DT: 0.35,
   SIM_SPRING_RATE: 0.003,
-  SIM_EVAP: 0.0005,
+  SIM_EVAP: 0.01,
   SIM_ABSORB: 0.001,
   SIM_Kc: 0.18,
   SIM_Ks: 0.12,
