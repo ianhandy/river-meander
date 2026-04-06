@@ -130,21 +130,29 @@ function initSim(startWithWater) {
 setInitSim(initSim);
 
 // ── Main loop ──
+// Sim and render are decoupled: sim runs first, render only if time remains.
+// This lets the browser breathe between frames.
+
+let _prevTs = 0;
+let _renderSkips = 0;
 
 function loop(ts) {
   requestAnimationFrame(loop);
   if (!state.running || !state.terrain) return;
-  if (ts - state.lastRender < FRAME_MS) return;
-  state.lastRender = ts;
 
-  // FPS-aware step count: auto-reduce if running too slow
-  const elapsed = ts - state.lastRender;
+  // Measure actual frame time
+  const elapsed = ts - _prevTs;
+  if (elapsed < FRAME_MS) return; // rate limit
+  _prevTs = ts;
+
+  // FPS-aware step count
   const actualFPS = elapsed > 0 ? 1000 / elapsed : 30;
-  let targetSteps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
-  if (actualFPS < 10 && targetSteps > 1) targetSteps = 1;
-  const steps = targetSteps;
-  let maxDepth = 0;
+  let steps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
+  if (actualFPS < 10 && steps > 1) steps = 1;
 
+  // Sim step(s)
+  const simStart = performance.now();
+  let maxDepth = 0;
   for (let s = 0; s < steps; s++) {
     state.stepsSinceTectonics++;
     if (state.stepsSinceTectonics >= TECTONIC_INTERVAL) {
@@ -156,6 +164,7 @@ function loop(ts) {
     state.year += YEARS_PER_STEP;
     state.stepsSinceOxbowCheck++;
   }
+  const simMs = performance.now() - simStart;
 
   if (state.stepsSinceOxbowCheck > 50) {
     detectOxbows();
@@ -164,10 +173,21 @@ function loop(ts) {
 
   if (state.stepsSinceOxbowCheck % 10 === 0) computeHydraulicHead();
 
+  // Update stats (cheap)
   document.getElementById('yr').textContent = Math.round(state.year).toLocaleString();
   document.getElementById('max-depth').textContent = (maxDepth * 100).toFixed(1);
   const yr2el = document.getElementById('yr2');
   if (yr2el) yr2el.textContent = Math.round(state.year).toLocaleString();
+
+  // Render only if sim didn't eat the whole frame budget.
+  // Skip render every other frame if sim is taking >50% of budget.
+  const budget = FRAME_MS;
+  if (simMs > budget * 0.7) {
+    _renderSkips++;
+    if (_renderSkips % 2 === 0) return; // skip every other render when slow
+  } else {
+    _renderSkips = 0;
+  }
 
   if (state.viewMode === '3d') {
     render3D(c3d);
