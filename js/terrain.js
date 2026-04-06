@@ -113,11 +113,11 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
 
   // ── Step 1: Generate plate stress field ──
   let numPlates, hasContinentalMask;
-  if (type === 'island') { numPlates = 3; hasContinentalMask = true; }
+  if (type === 'island') { numPlates = 2; hasContinentalMask = true; }
   else if (type === 'continent') { numPlates = 3; hasContinentalMask = true; }
-  else if (type === 'mountain_range') { numPlates = 3; hasContinentalMask = false; }
+  else if (type === 'mountain_range') { numPlates = 2; hasContinentalMask = false; }
   else if (type === 'floodplain') { numPlates = 2; hasContinentalMask = false; }
-  else { numPlates = 2; hasContinentalMask = false; }
+  else { numPlates = 2; hasContinentalMask = false; } // river_valley
   if (genNumPlates > 0) numPlates = genNumPlates;
 
   const plates = [];
@@ -138,8 +138,10 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       const fx = x / GW, fy = y / GH;
-      const warpX = x + simplex2D(fx * 2.5 + 300, fy * 2.5 + 300) * 5;
-      const warpY = y + simplex2D(fx * 2.5 + 400, fy * 2.5 + 400) * 5;
+      // Strong warp for natural, curved fault lines (not straight Voronoi edges)
+      const warpAmt = Math.max(GW, GH) * 0.08;
+      const warpX = x + simplex2D(fx * 2 + 300, fy * 2 + 300) * warpAmt;
+      const warpY = y + simplex2D(fx * 2 + 400, fy * 2 + 400) * warpAmt;
       let d1 = Infinity, d2 = Infinity, p1 = 0, p2 = 0;
       for (let p = 0; p < numPlates; p++) {
         const dx = warpX - plates[p].px, dy = warpY - plates[p].py;
@@ -148,7 +150,10 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         else if (d < d2) { d2 = d; p2 = p; }
       }
       const boundaryDist = Math.abs(d1 - d2);
-      const boundaryProx = Math.exp(-boundaryDist * boundaryDist / 400);
+      // Wide falloff = broad mountain ranges, not thin ridges
+      // Scale with grid size so it works at any resolution
+      const falloffWidth = Math.max(GW, GH) * 0.15;
+      const boundaryProx = Math.exp(-boundaryDist * boundaryDist / (falloffWidth * falloffWidth));
       const relVx = plates[p1].vx - plates[p2].vx;
       const relVy = plates[p1].vy - plates[p2].vy;
       const nx = plates[p2].px - plates[p1].px;
