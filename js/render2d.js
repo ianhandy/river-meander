@@ -8,6 +8,7 @@ import { layerColor } from './helpers.js';
 export function render(canvas, ctx, maxDepth) {
   const { terrain, water, isOceanCell, saturation, hardnessNoise,
           flowSpeed, waterSmooth, sources, tectonicStress, faultStress,
+          fluxL, fluxR, fluxU, fluxD,
           GW, GH, seaLevel, camX, camY, camZoom,
           viewMode, showContours, showLayers, showPressure, showVelocity,
           showFaultLines, SIM_WATER_THRESH, SIM_GRAVITY,
@@ -209,6 +210,53 @@ export function render(canvas, ctx, maxDepth) {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Flow direction arrows (when velocity overlay is on)
+  if (showVelocity && fluxL && fluxR && fluxU && fluxD) {
+    // Draw arrows every N cells based on zoom level
+    const arrowSpacing = Math.max(2, Math.floor(4 / camZoom));
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1;
+
+    for (let gy = arrowSpacing; gy < GH - 1; gy += arrowSpacing) {
+      for (let gx = arrowSpacing; gx < GW - 1; gx += arrowSpacing) {
+        const i = gy * GW + gx;
+        if (water[i] < 0.001) continue;
+
+        const wd = Math.max(water[i], 0.001);
+        const vx = ((fluxR[i-1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i+1] || 0)) * 0.5 / wd;
+        const vy = ((fluxD[i-GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i+GW] || 0)) * 0.5 / wd;
+        const mag = Math.sqrt(vx * vx + vy * vy);
+        if (mag < 0.01) continue;
+
+        const cx = g2sx(gx + 0.5);
+        const cy = g2sy(gy + 0.5);
+        if (cx < 0 || cx > W || cy < 0 || cy > H) continue;
+
+        // Arrow length scales with speed, capped at 1.5 cells
+        const arrowLen = Math.min(cellPx * 1.5, cellPx * 0.3 + (mag / (velScale || 1)) * cellPx);
+        const nx = vx / mag, ny = vy / mag;
+        const ex = cx + nx * arrowLen;
+        const ey = cy + ny * arrowLen;
+
+        // Line
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        // Arrowhead
+        const headLen = Math.min(4, arrowLen * 0.35);
+        const ax = -nx * headLen, ay = -ny * headLen;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex + ax - ay * 0.4, ey + ay + ax * 0.4);
+        ctx.lineTo(ex + ax + ay * 0.4, ey + ay - ax * 0.4);
+        ctx.fill();
+      }
+    }
   }
 
   // Source markers
