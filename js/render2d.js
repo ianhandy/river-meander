@@ -3,7 +3,7 @@
 import state from './state.js';
 import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from './constants.js';
 import { lerp, sampleGrid, sampleGridFast, elevColor } from './math.js';
-import { layerColor } from './helpers.js';
+import { layerColor, getBeachiness } from './helpers.js';
 
 export function render(canvas, ctx, maxDepth) {
   const { terrain, water, isOceanCell, saturation, hardnessNoise,
@@ -124,6 +124,17 @@ export function render(canvas, ctx, maxDepth) {
           tb = lc.b * shade | 0;
         } else {
           [tr, tg, tb] = elevColor(h);
+        }
+      }
+
+      // Beach sand tint
+      if (viewMode === 'terrain' || viewMode === 'exposed') {
+        const beach = getBeachiness(ci);
+        if (beach > 0.1) {
+          const b = beach * 0.7;
+          tr = tr * (1 - b) + 220 * b | 0;
+          tg = tg * (1 - b) + 200 * b | 0;
+          tb = tb * (1 - b) + 150 * b | 0;
         }
       }
 

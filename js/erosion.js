@@ -2,7 +2,7 @@
 
 import state from './state.js';
 import { MIN_WATER } from './constants.js';
-import { getHardness } from './helpers.js';
+import { getHardness, getBeachiness } from './helpers.js';
 
 export function stepErosion() {
   const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD,
@@ -51,7 +51,11 @@ export function stepErosion() {
       }
 
       const pressureBoost = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
-      const erosionForce = speed * pressureBoost * slopeFactor * curvatureFactor;
+      let erosionForce = speed * pressureBoost * slopeFactor * curvatureFactor;
+
+      // Beach sand is stable — waves don't carve channels through it
+      const beach = getBeachiness(i);
+      if (beach > 0) erosionForce *= (1 - beach * 0.9); // up to 90% erosion reduction
 
       const localH = getHardness(i);
       const Ks_eff = SIM_Ks * erodSlider / localH;

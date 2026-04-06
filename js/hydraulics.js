@@ -3,6 +3,7 @@
 import state from './state.js';
 import { MIN_WATER, LAYERS } from './constants.js';
 import { getOceanLevel } from './ocean.js';
+import { getBeachiness } from './helpers.js';
 
 export function stepHydraulic() {
   const { terrain, water, fluxL, fluxR, fluxU, fluxD, flowSpeed,
@@ -114,15 +115,19 @@ export function stepHydraulic() {
           water[i] *= (1 - Math.min(0.5, evapFrac));
         }
 
-        // Fractional absorption — same principle
+        // Fractional absorption — beach sand absorbs much faster
         if (water[i] > 0 && saturation[i] < 1.0) {
           const absorbMult = SIM_MOVING_ABSORB + stagnancy * SIM_STAGNANT_ABSORB;
-          const absorbFrac = SIM_ABSORB * absorbMult * (1.0 - saturation[i]);
-          const absorbed = water[i] * Math.min(0.3, absorbFrac);
+          const beach = getBeachiness(i);
+          const beachBoost = 1 + beach * 15; // sand absorbs up to 16x faster
+          const absorbFrac = SIM_ABSORB * absorbMult * (1.0 - saturation[i]) * beachBoost;
+          const absorbed = water[i] * Math.min(0.5, absorbFrac);
           water[i] -= absorbed;
           saturation[i] = Math.min(1.0, saturation[i] + absorbed * 10);
         } else if (water[i] <= 0 && saturation[i] > 0) {
-          saturation[i] = Math.max(0, saturation[i] - 0.001);
+          // Beach sand drains faster too
+          const beach = getBeachiness(i);
+          saturation[i] = Math.max(0, saturation[i] - 0.001 * (1 + beach * 5));
         }
 
         // Edge drain: water exits the map at all edges
