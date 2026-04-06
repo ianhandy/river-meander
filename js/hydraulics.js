@@ -95,8 +95,10 @@ export function stepHydraulic() {
           water[i] = target;
         }
       } else {
-        const _vx = ((x > 0 ? fluxR[i-1] : 0) - fluxL[i] + fluxR[i] - (x < GW-1 ? fluxL[i+1] : 0)) * 0.5;
-        const _vy = ((y > 0 ? fluxD[i-GW] : 0) - fluxU[i] + fluxD[i] - (y < GH-1 ? fluxU[i+GW] : 0)) * 0.5;
+        // Velocity = flux / depth (narrower/shallower = faster, like real water)
+        const wd = Math.max(water[i], 0.001);
+        const _vx = ((x > 0 ? fluxR[i-1] : 0) - fluxL[i] + fluxR[i] - (x < GW-1 ? fluxL[i+1] : 0)) * 0.5 / wd;
+        const _vy = ((y > 0 ? fluxD[i-GW] : 0) - fluxU[i] + fluxD[i] - (y < GH-1 ? fluxU[i+GW] : 0)) * 0.5 / wd;
         const ax = Math.abs(_vx), ay = Math.abs(_vy);
         const spd = ax > ay ? ax + ay * 0.4 : ay + ax * 0.4;
         flowSpeed[i] = flowSpeed[i] * 0.8 + spd * 0.2;
