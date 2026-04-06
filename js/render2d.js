@@ -146,9 +146,8 @@ export function render(canvas, ctx, maxDepth) {
       // Water overlay
       if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : SIM_WATER_THRESH)) {
         const depth = Math.min(1, w / REF_DEPTH);
-        // Sharper water edges: steep alpha ramp near threshold
-        const edgeSharpness = Math.min(1, (w - SIM_WATER_THRESH) / (SIM_WATER_THRESH * 3));
-        const alpha = Math.min(1, edgeSharpness * (0.5 + depth * 0.5)) * waterOpacityUI;
+        // Quick ramp to visible, then gradual increase with depth
+        const alpha = Math.min(1, 0.6 + depth * 0.4) * waterOpacityUI;
 
         let wr, wg, wb;
         if (showPressure) {
@@ -170,7 +169,7 @@ export function render(canvas, ctx, maxDepth) {
             wr = lerp(50, 255, t2) | 0; wg = lerp(220, 100, t2) | 0; wb = lerp(80, 20, t2) | 0;
           }
         } else {
-          wr = lerp(20, 65, depth) | 0; wg = lerp(80, 150, depth) | 0; wb = lerp(190, 220, depth) | 0;
+          wr = lerp(30, 15, depth) | 0; wg = lerp(100, 50, depth) | 0; wb = lerp(210, 180, depth) | 0;
         }
 
         const a = alpha;
