@@ -266,9 +266,9 @@ export function initUI(c3d) {
     btnDown.tabIndex = -1;
 
     const nudge = (dir) => {
-      const cur = parseFloat(el.value);
-      const next = Math.max(min, Math.min(max, +(cur + step * dir).toPrecision(10)));
-      el.value = next;
+      const cur = state[key]; // read from state, not slider (may exceed slider range)
+      const next = Math.max(0, +(cur + step * dir).toPrecision(10));
+      el.value = next; // slider clamps visually
       state[key] = next;
       valEl.textContent = formatDevVal(next);
       saveDevSettings();
@@ -299,11 +299,10 @@ export function initUI(c3d) {
       const commit = () => {
         const v = parseFloat(input.value);
         if (!isNaN(v)) {
-          const min = parseFloat(sliderEl.min), max = parseFloat(sliderEl.max);
-          const clamped = Math.max(min, Math.min(max, v));
-          sliderEl.value = clamped;
-          state[key] = clamped;
-          valEl.textContent = formatDevVal(clamped);
+          const actual = Math.max(0, v); // any non-negative value
+          sliderEl.value = actual; // slider clamps visually, that's fine
+          state[key] = actual;
+          valEl.textContent = formatDevVal(actual);
           saveDevSettings();
         } else {
           valEl.textContent = origText;
