@@ -12,8 +12,7 @@ export function stepErosion() {
           SIM_SLOPE_COLLAPSE, SIM_VERTICAL_EROSION,
           SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE,
           SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN,
-          SIM_REPOSE_MIN, SIM_REPOSE_MAX,
-          SIM_TALUS_NOISE } = state;
+          SIM_REPOSE_MIN, SIM_REPOSE_MAX } = state;
   const erodSlider = erodibilityUI;
 
   for (let y = 1; y < GH - 1; y++) {
@@ -189,24 +188,25 @@ export function stepErosion() {
         // Remove from cliff top
         delta[i] -= collapsed;
 
-        // Noisy deposit distribution — SIM_TALUS_NOISE (0=uniform, 1=chaotic)
-        // Total deposited always = collapsed (mass conserved)
-        const tn = SIM_TALUS_NOISE;
-        const baseShare = 0.6 - Math.random() * tn * 0.35;
-        const slopeShare = 0.05 + Math.random() * tn * 0.25;
-        const latTotal = collapsed * Math.max(0, 1 - baseShare - slopeShare);
+        // Deposit at base: 60% directly below, 20% spread laterally on each side
+        delta[steepestIdx] += collapsed * 0.6;
 
-        delta[steepestIdx] += collapsed * baseShare;
-        delta[steepestIdx] += collapsed * slopeShare;
+        // Lateral spread — perpendicular to the slope direction
+        const perpA = (steepestDy === 0)
+          ? i + GW   // slope is horizontal → spread vertically
+          : i + 1;   // slope is vertical → spread horizontally
+        const perpB = (steepestDy === 0)
+          ? i - GW
+          : i - 1;
 
-        // Lateral spread — perpendicular to slope direction
-        const perpA = (steepestDy === 0) ? i + GW : i + 1;
-        const perpB = (steepestDy === 0) ? i - GW : i - 1;
-        const latBias = 0.5 + (Math.random() - 0.5) * tn;
+        // Deposit laterally at the BASE level (neighbors of the low cell)
         const latA = steepestIdx + (perpA - i);
         const latB = steepestIdx + (perpB - i);
-        if (latA >= 0 && latA < GW * GH) delta[latA] += latTotal * latBias;
-        if (latB >= 0 && latB < GW * GH) delta[latB] += latTotal * (1 - latBias);
+        if (latA >= 0 && latA < GW * GH) delta[latA] += collapsed * 0.15;
+        if (latB >= 0 && latB < GW * GH) delta[latB] += collapsed * 0.15;
+
+        // Remaining 10% deposits on the slope face itself (mid-slope scree)
+        delta[steepestIdx] += collapsed * 0.1;
       }
     }
 
