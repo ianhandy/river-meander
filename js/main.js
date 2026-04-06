@@ -173,11 +173,16 @@ function loop(ts) {
 
   if (state.stepsSinceOxbowCheck % 10 === 0) computeHydraulicHead();
 
-  // Update stats (cheap)
-  document.getElementById('yr').textContent = Math.round(state.year).toLocaleString();
+  // Update stats — show elapsed time instead of years
+  const totalSec = Math.floor(state.year / YEARS_PER_STEP / 30); // approx real seconds at 30fps
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  const yrStr = Math.round(state.year).toLocaleString();
+  document.getElementById('yr').textContent = `${yrStr}yr (${timeStr})`;
   document.getElementById('max-depth').textContent = (maxDepth * 100).toFixed(1);
   const yr2el = document.getElementById('yr2');
-  if (yr2el) yr2el.textContent = Math.round(state.year).toLocaleString();
+  if (yr2el) yr2el.textContent = `${yrStr}yr`;
 
   // Render only if sim didn't eat the whole frame budget.
   // Skip render every other frame if sim is taking >50% of budget.

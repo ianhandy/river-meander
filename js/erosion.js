@@ -145,10 +145,27 @@ export function stepErosion() {
           }
         }
       } else {
+        // Deposition: water drops sediment when carrying capacity decreases
         const deposit = SIM_Kd * (sediment[i] - C_eq);
         terrain[i] += deposit;
         sediment[i] = Math.max(0, sediment[i] - deposit);
-        sediment[i] *= 0.98;
+
+        // Slow water also deposits onto adjacent dry banks (floodplain building)
+        if (speed < 0.05 && sediment[i] > 0.0001) {
+          const bankDep = sediment[i] * 0.05; // 5% to banks
+          const nb = [i-1, i+1, i-GW, i+GW];
+          let dryCount = 0;
+          for (const ni of nb) if (water[ni] < MIN_WATER && terrain[ni] < terrain[i] + water[i]) dryCount++;
+          if (dryCount > 0) {
+            const perBank = bankDep / dryCount;
+            for (const ni of nb) {
+              if (water[ni] < MIN_WATER && terrain[ni] < terrain[i] + water[i]) {
+                terrain[ni] += perBank;
+                sediment[i] -= perBank;
+              }
+            }
+          }
+        }
       }
 
       // NaN guard
@@ -303,6 +320,21 @@ export function stepErosion() {
       const drop = sediment[i] * beach * 0.3;
       terrain[i] += drop;
       sediment[i] -= drop;
+    }
+  }
+
+  // Stagnant pool sedimentation — sediment settles to the bottom in still water.
+  // This builds up soft layers in lake beds and pools.
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      if (sediment[i] < 1e-5 || water[i] < 0.002) continue;
+      const spd = flowSpeed ? flowSpeed[i] : 0;
+      if (spd > 0.02) continue; // only in still water
+      // Settle 10% of sediment per step
+      const settle = sediment[i] * 0.1;
+      terrain[i] += settle;
+      sediment[i] -= settle;
     }
   }
 
