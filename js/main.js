@@ -137,7 +137,12 @@ function loop(ts) {
   if (ts - state.lastRender < FRAME_MS) return;
   state.lastRender = ts;
 
-  const steps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
+  // FPS-aware step count: auto-reduce if running too slow
+  const elapsed = ts - state.lastRender;
+  const actualFPS = elapsed > 0 ? 1000 / elapsed : 30;
+  let targetSteps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
+  if (actualFPS < 10 && targetSteps > 1) targetSteps = 1;
+  const steps = targetSteps;
   let maxDepth = 0;
 
   for (let s = 0; s < steps; s++) {
@@ -174,11 +179,17 @@ function loop(ts) {
 // ── Resize ──
 
 function resize() {
-  const maxSize = Math.min(window.innerWidth, window.innerHeight - UI_H);
-  canvas.width = maxSize;
-  canvas.height = maxSize;
-  c3d.width = maxSize;
-  c3d.height = maxSize;
+  const screenSize = Math.min(window.innerWidth, window.innerHeight - UI_H);
+  // Cap internal resolution for performance — CSS scales to screen size
+  const maxRes = Math.min(screenSize, 1200);
+  canvas.style.width = screenSize + 'px';
+  canvas.style.height = screenSize + 'px';
+  canvas.width = maxRes;
+  canvas.height = maxRes;
+  c3d.style.width = screenSize + 'px';
+  c3d.style.height = screenSize + 'px';
+  c3d.width = Math.min(screenSize, 800);
+  c3d.height = Math.min(screenSize, 800);
 
   if (!state.terrain) {
     state.currentSeed = Math.floor(Math.random() * 99999);
@@ -186,7 +197,7 @@ function resize() {
     return;
   }
   if (state.glInited && state.gl) {
-    state.gl.viewport(0, 0, maxSize, maxSize);
+    state.gl.viewport(0, 0, c3d.width, c3d.height);
   }
 }
 

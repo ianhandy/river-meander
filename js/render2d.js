@@ -41,8 +41,10 @@ export function render(canvas, ctx, maxDepth) {
   const pyToGrid = viewSize / H;
 
   // Compute stats for overlays (5-number summary of active data)
+  // Stats: sample every 10th cell for performance (O(n) instead of O(n log n) sort)
   let statMin = Infinity, statMax = -Infinity, statSum = 0, statCount = 0;
   const statSamples = [];
+  const sampleStride = Math.max(1, Math.floor(N / 5000)); // cap at ~5000 samples
   if (showVelocity && flowSpeed) {
     for (let i = 0; i < N; i++) {
       if (water[i] > 0.001) {
@@ -50,7 +52,7 @@ export function render(canvas, ctx, maxDepth) {
         if (v < statMin) statMin = v;
         if (v > statMax) statMax = v;
         statSum += v; statCount++;
-        statSamples.push(v);
+        if (i % sampleStride === 0) statSamples.push(v);
       }
     }
   } else if (showPressure) {
@@ -60,7 +62,7 @@ export function render(canvas, ctx, maxDepth) {
         if (v < statMin) statMin = v;
         if (v > statMax) statMax = v;
         statSum += v; statCount++;
-        statSamples.push(v);
+        if (i % sampleStride === 0) statSamples.push(v);
       }
     }
   }
@@ -68,7 +70,6 @@ export function render(canvas, ctx, maxDepth) {
   const statMedian = statSamples.length > 0 ? statSamples[Math.floor(statSamples.length / 2)] : 0;
   const statQ1 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.25)] : statMin;
   const statQ3 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.75)] : statMax;
-  // For velocity rendering: normalize to the 95th percentile so outliers don't crush the range
   const velScale = statSamples.length > 10 ? statSamples[Math.floor(statSamples.length * 0.95)] : 1;
 
   for (let py = 0; py < H; py++) {
