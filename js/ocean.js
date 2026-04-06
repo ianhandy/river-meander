@@ -83,21 +83,23 @@ export function computeHydraulicHead() {
   const SLOPE_PER_CELL = 0.0003;
   hydraulicHead.fill(Infinity);
 
-  const queue = [];
+  // Use typed array queue to avoid JS array length limits on large grids
+  const queue = new Int32Array(N);
+  let qHead = 0, qTail = 0;
+
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
       if (isOceanCell[i] || (isEdge && water[i] > WATER_CONNECT_THRESH)) {
         hydraulicHead[i] = isOceanCell[i] ? seaLevel : terrain[i];
-        queue.push(i);
+        if (qTail < N) queue[qTail++] = i;
       }
     }
   }
 
-  let head = 0;
-  while (head < queue.length) {
-    const i = queue[head++];
+  while (qHead < qTail) {
+    const i = queue[qHead++];
     const myHead = hydraulicHead[i];
     const x = i % GW, y = (i / GW) | 0;
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
@@ -108,7 +110,7 @@ export function computeHydraulicHead() {
       const proposedHead = Math.max(terrain[ni], myHead + SLOPE_PER_CELL);
       if (proposedHead < hydraulicHead[ni]) {
         hydraulicHead[ni] = proposedHead;
-        queue.push(ni);
+        if (qTail < N) queue[qTail++] = i;
       }
     }
   }
