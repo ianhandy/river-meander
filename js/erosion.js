@@ -129,9 +129,10 @@ export function stepErosion() {
         sediment[i] *= 0.98;
       }
 
-      // NaN guard
-      if (!isFinite(terrain[i])) terrain[i] = origTerrain[i];
-      if (!isFinite(sediment[i])) sediment[i] = 0;
+      // Safety clamps — prevent any runaway values
+      if (!isFinite(terrain[i]) || terrain[i] > 2.0) terrain[i] = origTerrain[i];
+      if (!isFinite(sediment[i]) || sediment[i] > 1.0) sediment[i] = 0;
+      if (terrain[i] < -0.5) terrain[i] = -0.5;
     }
   }
 
@@ -146,6 +147,7 @@ export function stepErosion() {
                    + (tSnap[i-GW] - h) + (tSnap[i+GW] - h);
         terrain[i] += SIM_Kt * tSum * 0.25;
         if (terrain[i] < -0.5) terrain[i] = -0.5;
+        if (terrain[i] > 2.0) terrain[i] = origTerrain[i];
       }
     }
   }
@@ -225,6 +227,7 @@ export function stepErosion() {
     for (let i = 0; i < GW * GH; i++) {
       terrain[i] += delta[i];
       if (terrain[i] < -0.5) terrain[i] = -0.5;
+      if (terrain[i] > 2.0) terrain[i] = state.origTerrain[i];
     }
   }
 

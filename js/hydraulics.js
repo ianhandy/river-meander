@@ -31,6 +31,15 @@ export function stepHydraulic() {
     }
   }
 
+  // Safety: clamp any runaway values before processing
+  for (let i = 0; i < N; i++) {
+    if (!isFinite(water[i]) || water[i] > 10) water[i] = 0;
+    if (!isFinite(fluxL[i])) fluxL[i] = 0;
+    if (!isFinite(fluxR[i])) fluxR[i] = 0;
+    if (!isFinite(fluxU[i])) fluxU[i] = 0;
+    if (!isFinite(fluxD[i])) fluxD[i] = 0;
+  }
+
   // Pass 1: update outflow fluxes (pipe model)
   // Pure water-surface differential — no terrain bias
   const damp = SIM_VISCOUS_DAMPING;
