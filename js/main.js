@@ -115,8 +115,15 @@ function initSim(startWithWater) {
   if (yr2) yr2.textContent = '0';
   if (sd2) sd2.textContent = s.currentSeed;
 
-  // Reset 3D if initialized (index buffer depends on grid size)
+  // Reset 3D — force back to 2D terrain view
   s.glInited = false;
+  if (s.viewMode === '3d') {
+    s.viewMode = 'terrain';
+    document.getElementById('c').classList.remove('hidden-2d');
+    document.getElementById('c3d').classList.remove('active-3d');
+    document.getElementById('btn-view-terrain').classList.add('active');
+    document.getElementById('btn-view-3d').classList.remove('active');
+  }
 }
 
 // Inject initSim into modal to avoid circular import
