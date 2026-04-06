@@ -41,6 +41,37 @@ export function render(canvas, ctx, maxDepth) {
   const pxToGrid = viewSize / W;
   const pyToGrid = viewSize / H;
 
+  // Compute stats for overlays (5-number summary of active data)
+  let statMin = Infinity, statMax = -Infinity, statSum = 0, statCount = 0;
+  const statSamples = [];
+  if (showVelocity && flowSpeed) {
+    for (let i = 0; i < N; i++) {
+      if (water[i] > 0.001) {
+        const v = flowSpeed[i];
+        if (v < statMin) statMin = v;
+        if (v > statMax) statMax = v;
+        statSum += v; statCount++;
+        statSamples.push(v);
+      }
+    }
+  } else if (showPressure) {
+    for (let i = 0; i < N; i++) {
+      if (water[i] > 0.001) {
+        const v = water[i];
+        if (v < statMin) statMin = v;
+        if (v > statMax) statMax = v;
+        statSum += v; statCount++;
+        statSamples.push(v);
+      }
+    }
+  }
+  statSamples.sort((a, b) => a - b);
+  const statMedian = statSamples.length > 0 ? statSamples[Math.floor(statSamples.length / 2)] : 0;
+  const statQ1 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.25)] : statMin;
+  const statQ3 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.75)] : statMax;
+  // For velocity rendering: normalize to the 95th percentile so outliers don't crush the range
+  const velScale = statSamples.length > 10 ? statSamples[Math.floor(statSamples.length * 0.95)] : 1;
+
   for (let py = 0; py < H; py++) {
     const gyf = camY + py * pyToGrid;
     for (let px = 0; px < W; px++) {
@@ -123,13 +154,13 @@ export function render(canvas, ctx, maxDepth) {
           const pN = Math.min(1, w * SIM_GRAVITY * 1.5);
           wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
         } else if (showVelocity) {
-          // Smooth velocity sampling: average with neighbors to remove grid artifacts
+          // Smooth velocity sampling + auto-scale to 95th percentile
           let rawSpd = flowSpeed ? flowSpeed[ci] : 0;
           if (flowSpeed && ci > GW && ci < N - GW) {
             rawSpd = (flowSpeed[ci] * 0.4 +
               (flowSpeed[ci-1] + flowSpeed[ci+1] + flowSpeed[ci-GW] + flowSpeed[ci+GW]) * 0.15);
           }
-          const spd = Math.min(1, rawSpd * 80);
+          const spd = Math.min(1, velScale > 0 ? rawSpd / velScale : 0);
           if (spd < 0.5) {
             const t2 = spd * 2;
             wr = lerp(20, 50, t2) | 0; wg = lerp(40, 220, t2) | 0; wb = lerp(180, 80, t2) | 0;
@@ -191,5 +222,28 @@ export function render(canvas, ctx, maxDepth) {
     ctx.strokeStyle = 'rgba(150,230,255,0.8)';
     ctx.lineWidth = 1;
     ctx.stroke();
+  }
+
+  // 5-number summary stats overlay for pressure/velocity views
+  if ((showPressure || showVelocity) && statCount > 0) {
+    const label = showVelocity ? 'Velocity' : 'Pressure';
+    const fmt = v => v < 0.001 ? v.toExponential(1) : v < 1 ? v.toFixed(3) : v.toFixed(1);
+    const lines = [
+      `${label} (${statCount} wet cells)`,
+      `Min: ${fmt(statMin)}`,
+      `Q1:  ${fmt(statQ1)}`,
+      `Med: ${fmt(statMedian)}`,
+      `Q3:  ${fmt(statQ3)}`,
+      `Max: ${fmt(statMax)}`,
+    ];
+    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(13,17,23,0.8)';
+    const bx = W - 130, by = 8;
+    ctx.fillRect(bx, by, 122, lines.length * 14 + 8);
+    ctx.fillStyle = '#58a6ff';
+    lines.forEach((line, idx) => {
+      ctx.fillStyle = idx === 0 ? '#8b949e' : '#58a6ff';
+      ctx.fillText(line, bx + 6, by + 14 + idx * 14);
+    });
   }
 }
