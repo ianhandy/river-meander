@@ -123,7 +123,13 @@ export function render(canvas, ctx, maxDepth) {
           const pN = Math.min(1, w * SIM_GRAVITY * 1.5);
           wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
         } else if (showVelocity) {
-          const spd = flowSpeed ? Math.min(1, flowSpeed[ci] * 80) : 0;
+          // Smooth velocity sampling: average with neighbors to remove grid artifacts
+          let rawSpd = flowSpeed ? flowSpeed[ci] : 0;
+          if (flowSpeed && ci > GW && ci < N - GW) {
+            rawSpd = (flowSpeed[ci] * 0.4 +
+              (flowSpeed[ci-1] + flowSpeed[ci+1] + flowSpeed[ci-GW] + flowSpeed[ci+GW]) * 0.15);
+          }
+          const spd = Math.min(1, rawSpd * 80);
           if (spd < 0.5) {
             const t2 = spd * 2;
             wr = lerp(20, 50, t2) | 0; wg = lerp(40, 220, t2) | 0; wb = lerp(180, 80, t2) | 0;
