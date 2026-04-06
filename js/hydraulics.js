@@ -32,46 +32,35 @@ export function stepHydraulic() {
   }
 
   // Pass 1: update outflow fluxes (pipe model)
-  const CB = 0.5;
+  // Pure water-surface differential — no terrain bias
+  const damp = SIM_VISCOUS_DAMPING;
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
-      fluxL[i] *= SIM_VISCOUS_DAMPING; fluxR[i] *= SIM_VISCOUS_DAMPING;
-      fluxU[i] *= SIM_VISCOUS_DAMPING; fluxD[i] *= SIM_VISCOUS_DAMPING;
+      fluxL[i] *= damp; fluxR[i] *= damp;
+      fluxU[i] *= damp; fluxD[i] *= damp;
       const h = terrain[i] + water[i];
 
       if (x < GW - 1) {
-        const j = i + 1;
-        const sd = h - terrain[j] - water[j];
-        const tb = Math.max(0, terrain[i] - terrain[j]) * CB;
-        fluxR[i] = Math.max(0, fluxR[i] + dt * g * (sd + tb));
+        fluxR[i] = Math.max(0, fluxR[i] + dt * g * (h - terrain[i+1] - water[i+1]));
       } else {
         fluxR[i] = Math.max(0, fluxR[i] + dt * g * water[i]);
       }
 
       if (x > 0) {
-        const j = i - 1;
-        const sd = h - terrain[j] - water[j];
-        const tb = Math.max(0, terrain[i] - terrain[j]) * CB;
-        fluxL[i] = Math.max(0, fluxL[i] + dt * g * (sd + tb));
+        fluxL[i] = Math.max(0, fluxL[i] + dt * g * (h - terrain[i-1] - water[i-1]));
       } else {
         fluxL[i] = Math.max(0, fluxL[i] + dt * g * water[i]);
       }
 
       if (y < GH - 1) {
-        const j = i + GW;
-        const sd = h - terrain[j] - water[j];
-        const tb = Math.max(0, terrain[i] - terrain[j]) * CB;
-        fluxD[i] = Math.max(0, fluxD[i] + dt * g * (sd + tb));
+        fluxD[i] = Math.max(0, fluxD[i] + dt * g * (h - terrain[i+GW] - water[i+GW]));
       } else {
         fluxD[i] = Math.max(0, fluxD[i] + dt * g * water[i]);
       }
 
       if (y > 0) {
-        const j = i - GW;
-        const sd = h - terrain[j] - water[j];
-        const tb = Math.max(0, terrain[i] - terrain[j]) * CB;
-        fluxU[i] = Math.max(0, fluxU[i] + dt * g * (sd + tb));
+        fluxU[i] = Math.max(0, fluxU[i] + dt * g * (h - terrain[i-GW] - water[i-GW]));
       } else {
         fluxU[i] = Math.max(0, fluxU[i] + dt * g * water[i]);
       }
