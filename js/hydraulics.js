@@ -65,20 +65,6 @@ export function stepHydraulic() {
         fluxU[i] = Math.max(0, fluxU[i] + dt * g * water[i]);
       }
 
-      // Momentum transfer: incoming flow biases outflow in the same direction.
-      // Water flowing into this cell from the left boosts rightward outflow.
-      if (water[i] > 0.001) {
-        const inR = x > 0      ? fluxR[i - 1]  : 0; // coming from left
-        const inL = x < GW - 1 ? fluxL[i + 1]  : 0; // coming from right
-        const inD = y > 0      ? fluxD[i - GW]  : 0; // coming from above
-        const inU = y < GH - 1 ? fluxU[i + GW]  : 0; // coming from below
-        const mom = 0.3; // momentum transfer fraction
-        fluxR[i] += inR * mom;
-        fluxL[i] += inL * mom;
-        fluxD[i] += inD * mom;
-        fluxU[i] += inU * mom;
-      }
-
       const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]) * dt;
       if (totalOut > water[i] + MIN_WATER) {
         const scale = (water[i] + MIN_WATER) / totalOut;
@@ -150,6 +136,13 @@ export function stepHydraulic() {
       }
 
       if (water[i] > maxDepth) maxDepth = water[i];
+    }
+  }
+
+  // Safety clamp: prevent water from going infinite
+  for (let i = 0; i < N; i++) {
+    if (!isFinite(water[i]) || water[i] > 10) {
+      water[i] = 0;
     }
   }
 
