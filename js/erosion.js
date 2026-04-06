@@ -93,8 +93,8 @@ export function stepErosion() {
         const verticalDelta = delta * vertSplit * beachDamp;
         const lateralDelta = delta * (1 - vertSplit) * beachDamp;
 
-        // Channel depth limit scales with water volume — more water = deeper channel allowed
-        const maxChannelDepth = 0.02 + Math.min(0.15, water[i] * 3);
+        // Channel depth limit scales with flow speed — fast rivers cut deep, pools can't
+        const maxChannelDepth = 0.01 + Math.min(0.12, speed * 0.5);
         const absFloor = origTerrain[i] - maxChannelDepth;
         const actualVertical = SIM_VERTICAL_EROSION ?
           Math.min(verticalDelta, Math.max(0, terrain[i] - absFloor)) : 0;
