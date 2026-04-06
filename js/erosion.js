@@ -33,24 +33,23 @@ export function stepErosion() {
 
       // ── Erosion bonuses (split: some vertical-only, some lateral-only) ──
 
-      // Speed bonus: faster water erodes more (applies to vertical — fast flow cuts down)
-      const speedBonus = 1.0 + speed * speed * 20;
+      // Speed bonus: faster water erodes more (gentle quadratic)
+      const speedBonus = 1.0 + speed * speed * 5;
 
       // Downhill bonus: steeper terrain = more lateral erosive power (LATERAL ONLY)
-      // Gravity pulls material sideways off steep slopes, not straight down
-      const slopeFactor = 1.0 + slope * 25;
+      const slopeFactor = 1.0 + slope * 8;
 
       // Low elevation bonus: lower water has accumulated energy (LATERAL ONLY)
-      const elevFactor = 1.0 + Math.max(0, seaLevel + 0.3 - terrain[i]) * 3;
+      const elevFactor = 1.0 + Math.max(0, seaLevel + 0.3 - terrain[i]) * 1;
 
       // Pressure system: inflow vs outflow balance (applies to both)
       const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
       const totalIn = (fluxR[i-1]||0) + (fluxL[i+1]||0) + (fluxD[i-GW]||0) + (fluxU[i+GW]||0);
       const flowBalance = totalOut > 0.0001 ? totalIn / totalOut : 1;
-      const pressureFactor = flowBalance > 1 ? 1 + (flowBalance - 1) * 2 : flowBalance;
+      const pressureFactor = flowBalance > 1 ? 1 + (flowBalance - 1) * 0.5 : flowBalance;
 
       // Volume pressure: deep water pushes down (applies to vertical only)
-      const volumePressure = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY;
+      const volumePressure = 1.0 + SIM_PRESSURE_WT * water[i] * SIM_GRAVITY * 0.3;
 
       // Curvature: magnitude + sign
       const nvx = vx / speed, nvy = vy / speed;
@@ -86,7 +85,7 @@ export function stepErosion() {
       const C_eq = SIM_Kc * erosionForce * Math.sqrt(water[i]);
 
       if (C_eq > sediment[i]) {
-        const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.015);
+        const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.005);
         // Split by relative force strength — stronger force gets more share
         const vertShare = vertForce / (vertForce + latForce + 0.001);
         const vertSplit = SIM_VERTICAL_EROSION ? vertShare : 0;
