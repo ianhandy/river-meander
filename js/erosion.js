@@ -10,13 +10,14 @@ export function stepErosion() {
           GW, GH, erodibilityUI, seaLevel,
           SIM_Kc, SIM_Ks, SIM_Kd, SIM_Kt, SIM_PRESSURE_WT, SIM_GRAVITY,
           SIM_SLOPE_COLLAPSE, SIM_VERTICAL_EROSION,
-          SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE } = state;
+          SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE,
+          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN } = state;
   const erodSlider = erodibilityUI;
 
   for (let y = 1; y < GH - 1; y++) {
     for (let x = 1; x < GW - 1; x++) {
       const i = y * GW + x;
-      if (water[i] < MIN_WATER) continue;
+      if (water[i] < SIM_ERODE_WATER_MIN) continue;
       if (isOceanCell[i]) continue;
 
       // Velocity = flux / depth (consistent with hydraulics)
@@ -24,7 +25,7 @@ export function stepErosion() {
       const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5 / wd;
       const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5 / wd;
       const speed = Math.sqrt(vx * vx + vy * vy);
-      if (speed < 0.001) continue; // only truly stagnant water skipped
+      if (speed < SIM_ERODE_SPEED_MIN) continue;
 
       const dhdx = (terrain[i+1] - terrain[i-1]) * 0.5;
       const dhdy = (terrain[i+GW] - terrain[i-GW]) * 0.5;

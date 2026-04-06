@@ -101,6 +101,8 @@ const DEV_BINDINGS = [
   ['dev-move-evap',   'SIM_MOVING_EVAP',    'dev-move-evap-val'],
   ['dev-move-absorb', 'SIM_MOVING_ABSORB',  'dev-move-absorb-val'],
   ['dev-viscous',     'SIM_VISCOUS_DAMPING', 'dev-viscous-val'],
+  ['dev-erode-wmin',  'SIM_ERODE_WATER_MIN', 'dev-erode-wmin-val'],
+  ['dev-erode-smin',  'SIM_ERODE_SPEED_MIN', 'dev-erode-smin-val'],
   ['dev-lat-stag',    'SIM_LATERAL_STAGNANT','dev-lat-stag-val'],
   ['dev-lat-move',    'SIM_LATERAL_MOVING',  'dev-lat-move-val'],
   ['dev-talus-noise', 'SIM_TALUS_NOISE',     'dev-talus-noise-val'],

@@ -69,4 +69,6 @@ export const SIM_DEFAULTS = {
   SIM_MOVING_EVAP: 0.05,
   SIM_MOVING_ABSORB: 0.05,
   SIM_VISCOUS_DAMPING: 0.98,
+  SIM_ERODE_WATER_MIN: 0.0001,  // min water depth for erosion to occur
+  SIM_ERODE_SPEED_MIN: 0.001,   // min flow speed for erosion to occur
 };

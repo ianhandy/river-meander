@@ -577,6 +577,16 @@
 
   <h4>Erosion</h4>
   <div class="dev-row">
+    <label>Water Min <span class="dev-help" title="Minimum water depth for erosion to occur. Below this, terrain is stable.">?</span></label>
+    <input type="range" id="dev-erode-wmin" min="0" max="0.01" step="0.0001" value="0.0001">
+    <span class="dev-val" id="dev-erode-wmin-val">0.0001</span>
+  </div>
+  <div class="dev-row">
+    <label>Speed Min <span class="dev-help" title="Minimum flow speed for erosion. Below this, water is too stagnant to erode.">?</span></label>
+    <input type="range" id="dev-erode-smin" min="0" max="0.05" step="0.001" value="0.001">
+    <span class="dev-val" id="dev-erode-smin-val">0.001</span>
+  </div>
+  <div class="dev-row">
     <label>Capacity <span class="dev-help" title="Sediment transport capacity.">?</span></label>
     <input type="range" id="dev-kc" min="0.01" max="0.5" step="0.01" value="0.15">
     <span class="dev-val" id="dev-kc-val">0.15</span>
