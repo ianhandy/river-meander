@@ -233,21 +233,39 @@ export function stepErosion() {
   }
   sediment.set(tmpSed);
 
-  // Hydrostatic pressure erosion
+  // Hydrostatic pressure erosion — pooled water erodes the weakest barrier.
+  // Concentrates on the single lowest/softest rim cell (not all 4 equally).
+  // This is how lakes find outlets: water pushes through the weakest point.
   for (let y = 1; y < GH - 1; y++) {
     for (let x = 1; x < GW - 1; x++) {
       const i = y * GW + x;
-      if (water[i] < 0.005) continue;
+      if (water[i] < 0.001) continue; // lower threshold — any real pooling
+      if (isOceanCell[i]) continue;
+
+      const waterSurface = terrain[i] + water[i];
+
+      // Find the weakest barrier: the neighbor that's easiest to erode through
+      // Score = terrain height * hardness (lower = weaker = erodes first)
+      let bestNi = -1, bestScore = Infinity;
       for (const ni of [i-1, i+1, i-GW, i+GW]) {
-        if (water[ni] > 0.002) continue;
-        if (terrain[ni] <= terrain[i] + water[i]) continue;
-        const basePressure = water[i] * SIM_GRAVITY;
-        const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
-        const totalPressure = basePressure + trapped * 2.0;
-        const barrierH = getHardness(ni);
-        const erodeAmt = SIM_Ks * erodSlider * totalPressure * 0.1 / barrierH;
-        const floorP = origTerrain[ni] - 0.03;
-        terrain[ni] = Math.max(floorP, terrain[ni] - Math.min(erodeAmt, 0.015));
+        if (water[ni] > water[i]) continue; // not a barrier if it has more water
+        if (terrain[ni] <= terrain[i]) continue; // not a barrier if it's lower
+        const score = terrain[ni] * getHardness(ni);
+        if (score < bestScore) { bestScore = score; bestNi = ni; }
+      }
+      if (bestNi < 0) continue;
+
+      // Pressure from water depth
+      const basePressure = water[i] * SIM_GRAVITY;
+      const trapped = trappedPressure ? (trappedPressure[i] || 0) : 0;
+      const totalPressure = basePressure + trapped * 2.0;
+
+      // Erode the weakest barrier — harder material resists more
+      const barrierH = getHardness(bestNi);
+      const erodeAmt = Math.min(SIM_Ks * erodSlider * totalPressure * 0.05 / barrierH, 0.005);
+      if (erodeAmt > 0) {
+        terrain[bestNi] -= erodeAmt;
+        sediment[i] += erodeAmt; // mass conserved
       }
     }
   }
