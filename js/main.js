@@ -130,7 +130,7 @@ function loop(ts) {
   if (ts - state.lastRender < FRAME_MS) return;
   state.lastRender = ts;
 
-  const steps = Math.max(1, Math.round(state.speedUI / 10));
+  const steps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
   let maxDepth = 0;
 
   for (let s = 0; s < steps; s++) {

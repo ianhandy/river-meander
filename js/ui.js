@@ -349,6 +349,15 @@ export function initUI(c3d) {
     document.getElementById('btn-vert-erode').classList.toggle('active', state.SIM_VERTICAL_EROSION);
   });
 
+  // 1:1 realtime toggle
+  const btnRT = document.getElementById('btn-realtime');
+  if (btnRT) {
+    btnRT.addEventListener('click', () => {
+      state.realtimeMode = !state.realtimeMode;
+      btnRT.classList.toggle('active', state.realtimeMode);
+    });
+  }
+
   // Fault lines toggle
   document.getElementById('btn-faults').addEventListener('click', () => {
     state.showFaultLines = !state.showFaultLines;

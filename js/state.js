@@ -50,6 +50,7 @@ const state = {
   hardnessDepthUI: 0.50,
   waterOpacityUI: 0.90,
   speedUI: 15,
+  realtimeMode: false, // 1:1 mode: one sim step per render frame
 
   // View/UI state
   viewMode: 'terrain',
