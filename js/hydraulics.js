@@ -116,7 +116,9 @@ export function stepHydraulic() {
         const ax = Math.abs(_vx), ay = Math.abs(_vy);
         const spd = ax > ay ? ax + ay * 0.4 : ay + ax * 0.4;
         flowSpeed[i] = flowSpeed[i] * 0.8 + spd * 0.2;
-        const stagnancy = Math.max(0, 1 - flowSpeed[i] * 10);
+        // Smooth stagnancy curve: 1.0 at rest, gradual falloff with speed
+        // exp(-speed * 5) gives a natural decay instead of hard cutoff at 0.1
+        const stagnancy = Math.exp(-flowSpeed[i] * 5);
 
         // Fractional evaporation — removes a percentage of water, not a fixed amount.
         // Thin films evaporate proportionally, rainfall can still accumulate.
