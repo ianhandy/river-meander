@@ -71,7 +71,7 @@ export const SIM_DEFAULTS = {
   SIM_VISCOUS_DAMPING: 0.98,
   SIM_ERODE_WATER_MIN: 0.0001,  // min water depth for erosion to occur
   SIM_ERODE_SPEED_MIN: 0.001,   // min flow speed for erosion to occur
-  SIM_REPOSE_MIN: 0.01,         // min angle of repose (height diff per cell)
-  SIM_REPOSE_MAX: 0.04,         // max angle of repose (random per cell)
+  SIM_REPOSE_MIN: 0.02,         // min angle of repose (height diff per cell)
+  SIM_REPOSE_MAX: 0.05,         // max angle of repose (random per cell)
   SIM_TALUS_NOISE: 0.8,         // rockslide debris randomness (0=uniform, 1=chaotic)
 };
