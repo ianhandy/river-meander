@@ -72,7 +72,9 @@ const state = {
   genSeaLevel: 0.20,
   genMtnHeight: 0.50,
   genRainfall: 30,
-  genMapSize: 200,
+  genMapKm: 25,         // map size in kilometers
+  genCellsPerKm: 20,    // grid density: cells per kilometer
+  genMapSize: 500,       // computed: genMapKm * genCellsPerKm
   genForceOcean: true,
   genNumPlates: 0,
   genErosionPasses: 1,

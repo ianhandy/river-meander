@@ -13,7 +13,7 @@ export function showGenModal() {
   document.getElementById('btn-play').classList.remove('active');
 
   document.getElementById('gen-seed').value = Math.floor(Math.random() * 99999);
-  document.getElementById('gen-mapsize').value = state.genMapSize;
+  document.getElementById('gen-mapsize').value = state.genMapKm;
   document.getElementById('gen-octaves').value = state.genOctaves;
   document.getElementById('gen-valley').value = Math.round(state.genValley * 100);
   document.getElementById('gen-roughness').value = Math.round(state.genRoughness * 100);
@@ -36,7 +36,9 @@ export function hideGenModal() {
 }
 
 function updateGenLabels() {
-  document.getElementById('gen-mapsize-val').textContent = document.getElementById('gen-mapsize').value;
+  const km = parseInt(document.getElementById('gen-mapsize').value) || 25;
+  const cells = km * state.genCellsPerKm;
+  document.getElementById('gen-mapsize-val').textContent = `${km} km (${cells}×${cells})`;
   document.getElementById('gen-octaves-val').textContent = document.getElementById('gen-octaves').value;
   document.getElementById('gen-valley-val').textContent = document.getElementById('gen-valley').value;
   document.getElementById('gen-roughness-val').textContent = document.getElementById('gen-roughness').value;
@@ -50,7 +52,8 @@ function updateGenLabels() {
 
 function generateFromModal() {
   state.currentSeed    = parseInt(document.getElementById('gen-seed').value) || 0;
-  state.genMapSize     = parseInt(document.getElementById('gen-mapsize').value) || 200;
+  state.genMapKm       = parseInt(document.getElementById('gen-mapsize').value) || 25;
+  state.genMapSize     = state.genMapKm * state.genCellsPerKm;
   state.genOctaves     = parseInt(document.getElementById('gen-octaves').value);
   state.genValley      = parseInt(document.getElementById('gen-valley').value) / 100;
   state.genRoughness   = parseInt(document.getElementById('gen-roughness').value) / 100;
@@ -72,7 +75,8 @@ function generateFromModal() {
 
 export function applyRiverPreset() {
   state.currentSeed    = Math.floor(Math.random() * 99999);
-  state.genMapSize     = 200;
+  state.genMapKm       = 25;
+  state.genMapSize     = 25 * state.genCellsPerKm;
   state.genOctaves     = 4;
   state.genValley      = 0.6;
   state.genRoughness   = 0.3;
@@ -82,7 +86,7 @@ export function applyRiverPreset() {
   state.genNumPlates   = 2;
   state.genErosionPasses = 2;
   state.genForceOcean  = true;
-  state.genRainfall    = 0;
+  state.genRainfall    = 30;
 
   state.SIM_TECTONIC_SPEED = 0;
   const tEl = document.getElementById('dev-tspeed');
@@ -135,7 +139,8 @@ export function applyRiverPreset() {
 
 export function applyTestPreset() {
   state.currentSeed    = 42;
-  state.genMapSize     = 25;
+  state.genMapKm       = 1;
+  state.genMapSize     = 25;  // 1km at 20/km ≈ 25
   state.genOctaves     = 2;
   state.genValley      = 0;
   state.genRoughness   = 0.1;
