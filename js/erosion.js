@@ -87,10 +87,10 @@ export function stepErosion() {
               const eroded = lateralDelta * outerRate / getHardness(bi);
               terrain[bi] -= eroded;
               sediment[i] += eroded;
-            } else if (outerness < -0.1 && water[bi] < MIN_WATER) {
-              const dep = lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2;
+            } else if (outerness < -0.1 && water[bi] < MIN_WATER && sediment[i] > 0.0001) {
+              const dep = Math.min(lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2, sediment[i]);
               terrain[bi] += dep;
-              sediment[i] = Math.max(0, sediment[i] - dep);
+              sediment[i] -= dep;
             }
           }
           if (rbx >= 1 && rbx < GW-1 && rby >= 1 && rby < GH-1) {
@@ -100,10 +100,10 @@ export function stepErosion() {
               const eroded = lateralDelta * outerRate / getHardness(bi);
               terrain[bi] -= eroded;
               sediment[i] += eroded;
-            } else if (outerness < -0.1 && water[bi] < MIN_WATER) {
-              const dep = lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2;
+            } else if (outerness < -0.1 && water[bi] < MIN_WATER && sediment[i] > 0.0001) {
+              const dep = Math.min(lateralDelta * SIM_LATERAL_RATE * curvMag * 0.2, sediment[i]);
               terrain[bi] += dep;
-              sediment[i] = Math.max(0, sediment[i] - dep);
+              sediment[i] -= dep;
             }
           }
         }
@@ -114,16 +114,24 @@ export function stepErosion() {
         sediment[i] *= 0.98;
       }
 
-      // NaN guard — if terrain went bad, reset to original
+      // NaN guard
       if (!isFinite(terrain[i])) terrain[i] = origTerrain[i];
       if (!isFinite(sediment[i])) sediment[i] = 0;
+    }
+  }
 
-      // Gentle thermal smoothing only (weathering, not rockfall)
-      const h = terrain[i];
-      const tSum = (terrain[i-1] - h) + (terrain[i+1] - h)
-                 + (terrain[i-GW] - h) + (terrain[i+GW] - h);
-      terrain[i] += SIM_Kt * tSum * 0.25;
-      if (terrain[i] < -0.5) terrain[i] = -0.5;
+  // Thermal smoothing — separate pass reading from snapshot to prevent cascade
+  if (SIM_Kt > 0) {
+    const tSnap = terrain.slice();
+    for (let y = 1; y < GH - 1; y++) {
+      for (let x = 1; x < GW - 1; x++) {
+        const i = y * GW + x;
+        const h = tSnap[i];
+        const tSum = (tSnap[i-1] - h) + (tSnap[i+1] - h)
+                   + (tSnap[i-GW] - h) + (tSnap[i+GW] - h);
+        terrain[i] += SIM_Kt * tSum * 0.25;
+        if (terrain[i] < -0.5) terrain[i] = -0.5;
+      }
     }
   }
 

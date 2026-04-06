@@ -9,7 +9,7 @@ export function stepTectonics() {
           SIM_TECTONIC_SPEED, SIM_UPLIFT_RATE, SIM_RIFT_RATE,
           SIM_QUAKE_THRESHOLD, SIM_FAULT_EROSION } = state;
 
-  if (!plates.length || !tectonicStress) return;
+  if (!plates.length || !tectonicStress || SIM_TECTONIC_SPEED <= 0) return;
   const numPlates = plates.length;
 
   // Move plates
