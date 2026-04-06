@@ -11,10 +11,7 @@ export function stepErosion() {
           SIM_Kc, SIM_Ks, SIM_Kd, SIM_Kt, SIM_PRESSURE_WT, SIM_GRAVITY,
           SIM_SLOPE_COLLAPSE, SIM_VERTICAL_EROSION,
           SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE,
-          SIM_LATERAL_STAGNANT, SIM_LATERAL_MOVING,
-          SIM_TALUS_NOISE, SIM_REPOSE_MIN, SIM_REPOSE_MAX,
-          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN,
-          flowSpeed } = state;
+          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN } = state;
   const erodSlider = erodibilityUI;
 
   for (let y = 1; y < GH - 1; y++) {
@@ -88,13 +85,8 @@ export function stepErosion() {
           // Curvature-driven asymmetry (meander engine)
           const curvMag = Math.min(1, Math.abs(curvatureSign) * curvatureFactor * 0.5);
 
-          // Scale lateral erosion by flow state (stagnant vs moving)
-          const spd = flowSpeed ? flowSpeed[i] : 0;
-          const stagnancy = Math.exp(-spd * 5);
-          const latScale = SIM_LATERAL_MOVING + stagnancy * (SIM_LATERAL_STAGNANT - SIM_LATERAL_MOVING);
-
           // Erode both banks: base rate from depth, asymmetry from curvature
-          const baseRate = SIM_LATERAL_RATE * latScale * depthPressure;
+          const baseRate = SIM_LATERAL_RATE * depthPressure;
           const outerBoost = curvMag * (SIM_MEANDER_ASYMMETRY - 1);
 
           // Left bank
@@ -129,10 +121,9 @@ export function stepErosion() {
         sediment[i] *= 0.98;
       }
 
-      // Safety clamps — prevent any runaway values
-      if (!isFinite(terrain[i]) || terrain[i] > 2.0) terrain[i] = origTerrain[i];
-      if (!isFinite(sediment[i]) || sediment[i] > 1.0) sediment[i] = 0;
-      if (terrain[i] < -0.5) terrain[i] = -0.5;
+      // NaN guard
+      if (!isFinite(terrain[i])) terrain[i] = origTerrain[i];
+      if (!isFinite(sediment[i])) sediment[i] = 0;
     }
   }
 
@@ -147,7 +138,6 @@ export function stepErosion() {
                    + (tSnap[i-GW] - h) + (tSnap[i+GW] - h);
         terrain[i] += SIM_Kt * tSum * 0.25;
         if (terrain[i] < -0.5) terrain[i] = -0.5;
-        if (terrain[i] > 2.0) terrain[i] = origTerrain[i];
       }
     }
   }
@@ -157,8 +147,7 @@ export function stepErosion() {
   // and fans out laterally — forming talus slopes and scree fields.
   // Uses a delta buffer so collapse order doesn't matter.
   if (SIM_SLOPE_COLLAPSE > 0) {
-    const reposeMin = SIM_REPOSE_MIN;
-    const reposeRange = Math.max(0, SIM_REPOSE_MAX - SIM_REPOSE_MIN);
+    const REPOSE = 0.02;  // angle of repose threshold (height diff per cell)
     const collapseStrength = SIM_SLOPE_COLLAPSE * 0.001;
     const delta = new Float32Array(GW * GH);
 
@@ -186,8 +175,6 @@ export function stepErosion() {
           }
         }
 
-        // Each cell gets a random repose threshold between min and max
-        const REPOSE = reposeMin + Math.random() * reposeRange;
         if (steepestDrop <= REPOSE) continue;
 
         // Collapse amount scales with excess over angle of repose
@@ -199,27 +186,25 @@ export function stepErosion() {
         // Remove from cliff top
         delta[i] -= collapsed;
 
-        // Noisy deposit distribution — scaled by SIM_TALUS_NOISE (0=uniform, 1=chaotic)
-        const tn = SIM_TALUS_NOISE;
-        const baseShare = 0.6 - Math.random() * tn * 0.35;
-        const slopeShare = 0.05 + Math.random() * tn * 0.25;
-
-        delta[steepestIdx] += collapsed * baseShare;
+        // Deposit at base: 60% directly below, 20% spread laterally on each side
+        delta[steepestIdx] += collapsed * 0.6;
 
         // Lateral spread — perpendicular to the slope direction
-        const perpA = (steepestDy === 0) ? i + GW : i + 1;
-        const perpB = (steepestDy === 0) ? i - GW : i - 1;
+        const perpA = (steepestDy === 0)
+          ? i + GW   // slope is horizontal → spread vertically
+          : i + 1;   // slope is vertical → spread horizontally
+        const perpB = (steepestDy === 0)
+          ? i - GW
+          : i - 1;
 
-        // Asymmetric lateral spread
-        const latBias = 0.5 + (Math.random() - 0.5) * tn;
-        const latTotal = collapsed * (1 - baseShare - slopeShare);
+        // Deposit laterally at the BASE level (neighbors of the low cell)
         const latA = steepestIdx + (perpA - i);
         const latB = steepestIdx + (perpB - i);
-        if (latA >= 0 && latA < GW * GH) delta[latA] += latTotal * latBias;
-        if (latB >= 0 && latB < GW * GH) delta[latB] += latTotal * (1 - latBias);
+        if (latA >= 0 && latA < GW * GH) delta[latA] += collapsed * 0.15;
+        if (latB >= 0 && latB < GW * GH) delta[latB] += collapsed * 0.15;
 
-        // Mid-slope scree
-        delta[steepestIdx] += collapsed * slopeShare;
+        // Remaining 10% deposits on the slope face itself (mid-slope scree)
+        delta[steepestIdx] += collapsed * 0.1;
       }
     }
 
@@ -227,7 +212,6 @@ export function stepErosion() {
     for (let i = 0; i < GW * GH; i++) {
       terrain[i] += delta[i];
       if (terrain[i] < -0.5) terrain[i] = -0.5;
-      if (terrain[i] > 2.0) terrain[i] = state.origTerrain[i];
     }
   }
 
