@@ -227,7 +227,7 @@ export function render3D(c3d) {
 
       // Water surface mesh at terrain + water level
       wPos[i * 3]     = fx;
-      wPos[i * 3 + 1] = w > 0.001 ? h + w : h;
+      wPos[i * 3 + 1] = w > 0.001 ? h + w : -1; // dry cells hidden below terrain
       wPos[i * 3 + 2] = fz;
       wDepth[i] = w;
     }
