@@ -2,7 +2,7 @@
 
 import state from './state.js';
 import { UI_H, MOUNTAIN_THRESHOLD, MAX_SOURCES, YEARS_PER_STEP,
-         FRAME_MS, TECTONIC_INTERVAL } from './constants.js';
+         FRAME_MS, TECTONIC_INTERVAL, RAINFALL_MAX } from './constants.js';
 import { generateTerrain } from './terrain.js';
 import { computeOceanCells, computeDrainDistance, computeHydraulicHead } from './ocean.js';
 import { getHardness } from './helpers.js';
@@ -49,7 +49,7 @@ function initSim(startWithWater) {
 
   s.camX = 0; s.camY = 0; s.camZoom = 1.0;
   s.seaLevel = s.genSeaLevel;
-  s.rainfallRate = startWithWater !== false ? s.genRainfall : 0;
+  s.rainfallRate = startWithWater !== false ? (s.genRainfall / 100) * RAINFALL_MAX : 0;
 
   s.hasOcean = false;
   for (let i = 0; i < N; i++) { if (s.isOceanCell[i]) { s.hasOcean = true; break; } }
@@ -169,7 +169,7 @@ function resize() {
 
   if (!state.terrain) {
     state.currentSeed = Math.floor(Math.random() * 99999);
-    initSim(false);
+    initSim(true);
     return;
   }
   if (state.glInited && state.gl) {

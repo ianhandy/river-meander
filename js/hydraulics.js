@@ -102,28 +102,21 @@ export function stepHydraulic() {
         flowSpeed[i] = flowSpeed[i] * 0.8 + spd * 0.2;
         const stagnancy = Math.max(0, 1 - flowSpeed[i] * 10);
 
+        // Fractional evaporation — removes a percentage of water, not a fixed amount.
+        // Thin films evaporate proportionally, rainfall can still accumulate.
         if (water[i] > 0) {
-          // Moving water uses SIM_MOVING_EVAP, stagnant uses SIM_STAGNANT_EVAP
-          const evapRate = SIM_EVAP * (SIM_MOVING_EVAP + stagnancy * SIM_STAGNANT_EVAP);
-          const thinBoost = water[i] < 0.005 ? 3.0 : 1.0;
-          water[i] -= Math.min(water[i], evapRate * thinBoost);
+          const evapMult = SIM_MOVING_EVAP + stagnancy * SIM_STAGNANT_EVAP;
+          const evapFrac = SIM_EVAP * evapMult;
+          water[i] *= (1 - Math.min(0.5, evapFrac));
         }
 
+        // Fractional absorption — same principle
         if (water[i] > 0 && saturation[i] < 1.0) {
-          const erosionDepth = Math.max(0, origTerrain[i] - terrain[i]);
-          let worstPermeability = 1.0;
-          for (let l = 0; l < LAYERS.length; l++) {
-            if (LAYERS[l].depth <= erosionDepth) {
-              const layerPerm = 1.0 / LAYERS[l].hardness;
-              if (layerPerm < worstPermeability) worstPermeability = layerPerm;
-            }
-          }
-          // Moving water uses SIM_MOVING_ABSORB, stagnant uses SIM_STAGNANT_ABSORB
-          const absorbScale = SIM_MOVING_ABSORB + stagnancy * SIM_STAGNANT_ABSORB;
-          const absorbAmt = SIM_ABSORB * worstPermeability * (1.0 - saturation[i]) * absorbScale;
-          const absorbed = Math.min(water[i], absorbAmt);
+          const absorbMult = SIM_MOVING_ABSORB + stagnancy * SIM_STAGNANT_ABSORB;
+          const absorbFrac = SIM_ABSORB * absorbMult * (1.0 - saturation[i]);
+          const absorbed = water[i] * Math.min(0.3, absorbFrac);
           water[i] -= absorbed;
-          saturation[i] = Math.min(1.0, saturation[i] + absorbed * 20);
+          saturation[i] = Math.min(1.0, saturation[i] + absorbed * 10);
         } else if (water[i] <= 0 && saturation[i] > 0) {
           saturation[i] = Math.max(0, saturation[i] - 0.001);
         }
