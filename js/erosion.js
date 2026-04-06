@@ -63,11 +63,15 @@ export function stepErosion() {
 
       if (C_eq > sediment[i]) {
         const delta = Math.min(Ks_eff * (C_eq - sediment[i]), 0.015);
-        const vertSplit = SIM_VERTICAL_EROSION ? 0.12 : 0;
+        // Vertical/lateral split adapts to flow: fast narrow flow cuts down,
+        // slow wide flow cuts sideways. This creates the channel feedback loop.
+        const speedFactor = Math.min(1, speed * 5); // 0-1, high when fast
+        const vertSplit = SIM_VERTICAL_EROSION ? (0.3 + speedFactor * 0.4) : 0; // 30-70% vertical
         const verticalDelta = delta * vertSplit;
         const lateralDelta = delta * (1 - vertSplit);
 
-        const maxChannelDepth = 0.03;
+        // Channel depth limit scales with water volume — more water = deeper channel allowed
+        const maxChannelDepth = 0.02 + Math.min(0.15, water[i] * 3);
         const absFloor = origTerrain[i] - maxChannelDepth;
         const actualVertical = SIM_VERTICAL_EROSION ?
           Math.min(verticalDelta, Math.max(0, terrain[i] - absFloor)) : 0;
