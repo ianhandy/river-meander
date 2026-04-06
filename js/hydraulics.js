@@ -152,5 +152,34 @@ export function stepHydraulic() {
       if (water[i] > maxDepth) maxDepth = water[i];
     }
   }
+
+  // Pass 3: water surface equalization on flat terrain.
+  // Where adjacent cells have similar terrain height, water should level out.
+  // This fixes directional bias from in-place flux updates.
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+      if (water[i] < 0.0005) continue;
+      const myH = terrain[i] + water[i];
+
+      // Average water surface with wet neighbors
+      let sumH = myH, count = 1;
+      const nb = [i-1, i+1, i-GW, i+GW];
+      for (const ni of nb) {
+        if (water[ni] > 0.0005) {
+          sumH += terrain[ni] + water[ni];
+          count++;
+        }
+      }
+      if (count <= 1) continue;
+
+      // Move 20% toward the average surface level per step
+      const avgH = sumH / count;
+      const target = Math.max(0, avgH - terrain[i]);
+      water[i] += (target - water[i]) * 0.2;
+      if (water[i] < 0) water[i] = 0;
+    }
+  }
+
   return maxDepth;
 }
