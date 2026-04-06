@@ -11,8 +11,7 @@ export function stepErosion() {
           SIM_Kc, SIM_Ks, SIM_Kd, SIM_Kt, SIM_PRESSURE_WT, SIM_GRAVITY,
           SIM_SLOPE_COLLAPSE, SIM_VERTICAL_EROSION,
           SIM_MEANDER_ASYMMETRY, SIM_LATERAL_RATE,
-          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN,
-          SIM_REPOSE_MIN, SIM_REPOSE_MAX } = state;
+          SIM_ERODE_WATER_MIN, SIM_ERODE_SPEED_MIN } = state;
   const erodSlider = erodibilityUI;
 
   for (let y = 1; y < GH - 1; y++) {
@@ -148,7 +147,7 @@ export function stepErosion() {
   // and fans out laterally — forming talus slopes and scree fields.
   // Uses a delta buffer so collapse order doesn't matter.
   if (SIM_SLOPE_COLLAPSE > 0) {
-    const reposeRange = Math.max(0, SIM_REPOSE_MAX - SIM_REPOSE_MIN);
+    const REPOSE = 0.02;  // angle of repose threshold (height diff per cell)
     const collapseStrength = SIM_SLOPE_COLLAPSE * 0.001;
     const delta = new Float32Array(GW * GH);
 
@@ -176,7 +175,6 @@ export function stepErosion() {
           }
         }
 
-        const REPOSE = SIM_REPOSE_MIN + Math.random() * reposeRange;
         if (steepestDrop <= REPOSE) continue;
 
         // Collapse amount scales with excess over angle of repose
