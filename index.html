@@ -574,10 +574,6 @@ const MOUNTAIN_THRESHOLD = 0.68;
 const RAINFALL_MAX = 0.000005;
 const MAX_SOURCES = 2;
 
-// Offscreen canvas for scaling render to screen
-const offCanvas = document.createElement('canvas');
-const offCtx = offCanvas.getContext('2d');
-
 // Tunable via dev panel
 let SIM_GRAVITY = 10.0;
 let SIM_EVAP = 0.0005;
@@ -664,7 +660,6 @@ let SIM_QUAKE_THRESHOLD = 2.0;  // transform stress threshold for earthquake
 let SIM_FAULT_EROSION = 0.01;   // extra erosion rate at fault zones
 let SIM_SLOPE_COLLAPSE = 30;   // how aggressively steep slopes collapse (0=off, 30=default)
 let SIM_VERTICAL_EROSION = true; // toggle: water can erode downward into terrain
-let SIM_LATERAL_ONLY = false;    // when true, water only erodes banks, never bed
 let showFaultLines = false;     // debug overlay for tectonic boundaries
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1147,56 +1142,20 @@ function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl
   return t;
 }
 
-// Planchon-Darboux depression filling — ensures all cells can drain to boundary
-function fillDepressions(t, GW, GH) {
-  const N = GW * GH;
-  const EPS = 0.0001;
-  const filled = new Float32Array(N);
-
-  for (let y = 0; y < GH; y++) {
-    for (let x = 0; x < GW; x++) {
-      const i = y * GW + x;
-      if (x === 0 || x === GW-1 || y === 0 || y === GH-1) {
-        filled[i] = t[i];
-      } else {
-        filled[i] = 1.0;
-      }
-    }
-  }
-
-  let changed = true, iter = 0;
-  while (changed && iter < 200) {
-    changed = false;
-    iter++;
-    for (let y = 1; y < GH - 1; y++) {
-      for (let x = 1; x < GW - 1; x++) {
-        const i = y * GW + x;
-        if (filled[i] <= t[i]) continue;
-        for (const ni of [i-1, i+1, i-GW, i+GW]) {
-          const newH = Math.max(t[i], filled[ni] + EPS);
-          if (newH < filled[i]) {
-            filled[i] = newH;
-            changed = true;
-          }
-        }
-      }
-    }
-  }
-
-  for (let i = 0; i < N; i++) {
-    if (filled[i] > t[i]) t[i] = filled[i];
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // HARDNESS
 // ═══════════════════════════════════════════════════════════════════
+// Cached per-frame to avoid DOM reads in hot loops
+let cachedHardDepthScale = 0.5;
+function cacheHardnessDepth() {
+  cachedHardDepthScale = document.getElementById('hardness-depth').value / 100;
+}
+
 function getHardness(i) {
   const depthFraction = Math.max(0, origTerrain[i] - terrain[i]);
-  const hardDepthScale = document.getElementById('hardness-depth').value / 100;
   let baseHardness = LAYERS[0].hardness;
   for (let l = LAYERS.length - 1; l >= 0; l--) {
-    if (depthFraction >= LAYERS[l].depth * hardDepthScale * 1.5) {
+    if (depthFraction >= LAYERS[l].depth * cachedHardDepthScale * 1.5) {
       baseHardness = LAYERS[l].hardness;
       break;
     }
@@ -1207,9 +1166,8 @@ function getHardness(i) {
 
 function layerColor(i) {
   const depthFraction = Math.max(0, origTerrain[i] - terrain[i]);
-  const hardDepthScale = document.getElementById('hardness-depth').value / 100;
   for (let l = LAYERS.length - 1; l >= 0; l--) {
-    if (depthFraction >= LAYERS[l].depth * hardDepthScale * 1.5) return LAYERS[l];
+    if (depthFraction >= LAYERS[l].depth * cachedHardDepthScale * 1.5) return LAYERS[l];
   }
   return LAYERS[0];
 }
@@ -1265,8 +1223,7 @@ function computeDrainDistance() {
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
-      const isEdge = x === 0 || x === GW-1 || y === 0 || y === GH-1;
-      if (isOceanCell[i] || (isEdge && isOceanCell[i])) {
+      if (isOceanCell[i]) {
         drainDist[i] = 0;
         queue.push(i);
       }
@@ -1384,6 +1341,7 @@ function initSim(startWithWater) {
   hydraulicHead = new Float32Array(N);
   trappedPressure = new Float32Array(N);
 
+  cacheHardnessDepth();
   for (let i = 0; i < N; i++) hardness[i] = getHardness(i);
 
   // Reset camera
@@ -1848,13 +1806,13 @@ function detectOxbows() {
     if (water[i] > threshold && !isOceanCell[i]) channelCells.add(i);
   }
   if (prevChannelCells) {
-    const lost = [];
+    const lostSet = new Set();
     for (const cell of prevChannelCells) {
-      if (!channelCells.has(cell) && water[cell] > MIN_WATER * 0.5) lost.push(cell);
+      if (!channelCells.has(cell) && water[cell] > MIN_WATER * 0.5) lostSet.add(cell);
     }
-    if (lost.length > 15) {
+    if (lostSet.size > 15) {
       const visited = new Set();
-      for (const cell of lost) {
+      for (const cell of lostSet) {
         if (visited.has(cell)) continue;
         const queue = [cell];
         const component = [];
@@ -1867,7 +1825,7 @@ function detectOxbows() {
             const nx = cx + dx, ny = cy + dy;
             if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
             const ni = ny * GW + nx;
-            if (!visited.has(ni) && lost.includes(ni)) {
+            if (!visited.has(ni) && lostSet.has(ni)) {
               visited.add(ni);
               queue.push(ni);
             }
@@ -1944,20 +1902,40 @@ const ELEV_STOPS = [
   [1.00, 242, 242, 248],  // peak snow
 ];
 
-function elevColor(e) {
-  for (let i = 1; i < ELEV_STOPS.length; i++) {
-    if (e <= ELEV_STOPS[i][0]) {
-      const s0 = ELEV_STOPS[i-1], s1 = ELEV_STOPS[i];
-      const t = (e - s0[0]) / (s1[0] - s0[0]);
-      return [
-        lerp(s0[1], s1[1], t) | 0,
-        lerp(s0[2], s1[2], t) | 0,
-        lerp(s0[3], s1[3], t) | 0
-      ];
+// Pre-built 256-entry elevation color LUT — avoids per-pixel branching
+const ELEV_LUT_SIZE = 256;
+const ELEV_LUT_R = new Uint8Array(ELEV_LUT_SIZE);
+const ELEV_LUT_G = new Uint8Array(ELEV_LUT_SIZE);
+const ELEV_LUT_B = new Uint8Array(ELEV_LUT_SIZE);
+(function buildElevLUT() {
+  for (let i = 0; i < ELEV_LUT_SIZE; i++) {
+    const e = i / (ELEV_LUT_SIZE - 1);
+    let r, g, b;
+    let found = false;
+    for (let j = 1; j < ELEV_STOPS.length; j++) {
+      if (e <= ELEV_STOPS[j][0]) {
+        const s0 = ELEV_STOPS[j-1], s1 = ELEV_STOPS[j];
+        const t = (e - s0[0]) / (s1[0] - s0[0]);
+        r = lerp(s0[1], s1[1], t) | 0;
+        g = lerp(s0[2], s1[2], t) | 0;
+        b = lerp(s0[3], s1[3], t) | 0;
+        found = true;
+        break;
+      }
     }
+    if (!found) {
+      const last = ELEV_STOPS[ELEV_STOPS.length - 1];
+      r = last[1]; g = last[2]; b = last[3];
+    }
+    ELEV_LUT_R[i] = r;
+    ELEV_LUT_G[i] = g;
+    ELEV_LUT_B[i] = b;
   }
-  const last = ELEV_STOPS[ELEV_STOPS.length - 1];
-  return [last[1], last[2], last[3]];
+})();
+
+function elevColor(e) {
+  const idx = Math.max(0, Math.min(ELEV_LUT_SIZE - 1, (e * (ELEV_LUT_SIZE - 1)) | 0));
+  return [ELEV_LUT_R[idx], ELEV_LUT_G[idx], ELEV_LUT_B[idx]];
 }
 
 // Pre-smoothed water buffer for rendering (avoids dithering from raw interpolation)
@@ -2296,6 +2274,7 @@ function loop(ts) {
 
   const steps = Math.max(1, Math.round(document.getElementById('speed').value / 10));
   let maxDepth = 0;
+  cacheHardnessDepth();
 
   for (let s = 0; s < steps; s++) {
     // Tectonic step (slow — every N sim steps)
@@ -2568,6 +2547,7 @@ let gl = null;
 let glProgram = null;
 let glBuffers = null;
 let glInited = false;
+let pos3D = null, col3D = null, wat3D = null; // pre-allocated vertex arrays
 
 // Orbit camera
 let orbitTheta = Math.PI * 0.25;  // horizontal angle
@@ -2646,12 +2626,12 @@ function init3D() {
   const vs = gl.createShader(gl.VERTEX_SHADER);
   gl.shaderSource(vs, VERT_SRC);
   gl.compileShader(vs);
-  if (!gl.getShaderInfoLog(vs) === '') console.log(gl.getShaderInfoLog(vs));
+  if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) console.error('Vertex shader:', gl.getShaderInfoLog(vs));
 
   const fs = gl.createShader(gl.FRAGMENT_SHADER);
   gl.shaderSource(fs, '#extension GL_OES_standard_derivatives : enable\n' + FRAG_SRC);
   gl.compileShader(fs);
-  if (!gl.getShaderInfoLog(fs) === '') console.log(gl.getShaderInfoLog(fs));
+  if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) console.error('Fragment shader:', gl.getShaderInfoLog(fs));
 
   glProgram = gl.createProgram();
   gl.attachShader(glProgram, vs);
@@ -2715,6 +2695,12 @@ function init3D() {
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0.05, 0.07, 0.09, 1);
 
+  // Pre-allocate vertex arrays
+  const vtxCount = GW * GH;
+  pos3D = new Float32Array(vtxCount * 3);
+  col3D = new Float32Array(vtxCount * 3);
+  wat3D = new Float32Array(vtxCount);
+
   glInited = true;
 }
 
@@ -2722,9 +2708,15 @@ function render3D() {
   if (!gl || !glBuffers || !terrain) return;
 
   const N = GW * GH;
-  const positions = new Float32Array(N * 3);
-  const colors = new Float32Array(N * 3);
-  const waters = new Float32Array(N);
+  // Re-allocate if grid size changed since init
+  if (!pos3D || pos3D.length !== N * 3) {
+    pos3D = new Float32Array(N * 3);
+    col3D = new Float32Array(N * 3);
+    wat3D = new Float32Array(N);
+  }
+  const positions = pos3D;
+  const colors = col3D;
+  const waters = wat3D;
 
   // Build vertex data
   for (let y = 0; y < GH; y++) {
