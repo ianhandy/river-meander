@@ -49,7 +49,6 @@ export function step() {
   // ── Phase 2: Erosion & diffusion (all write to delta buffers) ─────────────
   stepStreamPower();
   stepDiffusion();
-  // stepBreakthrough(); — disabled. Pools fill and spill naturally.
 
   // ── Phase 3: Apply deltas ─────────────────────────────────────────────────
   // Clamp per-cell terrain change to prevent single-step blowups.
@@ -81,7 +80,8 @@ export function step() {
   }
   const ws = state.waterSmooth;
   ws.set(water);
-  for (let pass = 0; pass < 3; pass++) {
+  const smoothPasses = state.waterSmoothing !== undefined ? state.waterSmoothing : 3;
+  for (let pass = 0; pass < smoothPasses; pass++) {
     for (let y = 1; y < GH - 1; y++) {
       for (let x = 1; x < GW - 1; x++) {
         const ii = y * GW + x;

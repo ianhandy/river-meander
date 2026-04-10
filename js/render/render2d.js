@@ -8,7 +8,7 @@ import { layerColor, getBeachiness } from '../util/helpers.js';
 export function render(canvas, ctx, maxDepth) {
   const { terrain, water, isOceanCell, saturation, hardnessNoise,
           flowSpeed, waterSmooth, sources, tectonicStress, faultStress,
-          fluxL, fluxR, fluxU, fluxD,
+          fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
           GW, GH, seaLevel, camX, camY, camZoom,
           viewMode, showContours, showLayers, showPressure, showVelocity,
           showFaultLines, showStreams, waterThresh, gravity,
@@ -151,11 +151,11 @@ export function render(canvas, ctx, maxDepth) {
       // but lets deep channels show strongly.
       if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : waterThresh)) {
         const depth = Math.min(1, w / REF_DEPTH);
-        // Any water above the threshold is visible. Deeper = more opaque.
-        // Minimum alpha of 0.15 so thin water is faint but never invisible.
+        const alphaMin = state.waterAlphaMin || 0.15;
+        const alphaDepth = state.waterAlphaDepth || 0.85;
         const alpha = isOcean
           ? Math.min(1, 0.6 + depth * 0.4) * waterOpacityUI
-          : Math.min(1, 0.15 + depth * 0.85) * waterOpacityUI;
+          : Math.min(1, alphaMin + depth * alphaDepth) * waterOpacityUI;
 
         let wr, wg, wb;
         if (showPressure) {
@@ -176,7 +176,11 @@ export function render(canvas, ctx, maxDepth) {
             wr = lerp(50, 255, t2) | 0; wg = lerp(220, 100, t2) | 0; wb = lerp(80, 20, t2) | 0;
           }
         } else {
-          wr = lerp(30, 15, depth) | 0; wg = lerp(100, 50, depth) | 0; wb = lerp(210, 180, depth) | 0;
+          // Base color from sliders, darkens with depth
+          const bcr = state.waterColorR || 30, bcg = state.waterColorG || 100, bcb = state.waterColorB || 210;
+          wr = lerp(bcr, bcr * 0.5, depth) | 0;
+          wg = lerp(bcg, bcg * 0.5, depth) | 0;
+          wb = lerp(bcb, bcb * 0.85, depth) | 0;
         }
 
         const a = alpha;
@@ -190,7 +194,9 @@ export function render(canvas, ctx, maxDepth) {
       // Excludes ocean cells. Uses flow speed * flux to highlight moving streams,
       // not stagnant pools or the ocean basin.
       if (showStreams && fluxL && fluxR && fluxU && fluxD && !isOcean && water[ci] > 0.001) {
-        const totalFlux = fluxL[ci] + fluxR[ci] + fluxU[ci] + fluxD[ci];
+        const totalFlux = fluxL[ci] + fluxR[ci] + fluxU[ci] + fluxD[ci]
+                        + (fluxUL ? fluxUL[ci] : 0) + (fluxUR ? fluxUR[ci] : 0)
+                        + (fluxDL ? fluxDL[ci] : 0) + (fluxDR ? fluxDR[ci] : 0);
         const spd = flowSpeed ? flowSpeed[ci] : 0;
         const streamScore = totalFlux * spd; // high flux AND high speed = active stream
         if (streamScore > 0.001) {
@@ -244,9 +250,14 @@ export function render(canvas, ctx, maxDepth) {
       for (let gx = arrowSpacing; gx < GW - 1; gx += arrowSpacing) {
         const i = gy * GW + gx;
         if (water[i] < 0.001) continue;
-        const wd = Math.max(water[i], 0.001);
-        const vx = ((fluxR[i-1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i+1] || 0)) * 0.5 / wd;
-        const vy = ((fluxD[i-GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i+GW] || 0)) * 0.5 / wd;
+        const wd = Math.max(water[i], 0.01);
+        const D = 0.707;
+        const vx = (fluxR[i] - fluxL[i]
+                  + ((fluxUR ? fluxUR[i] : 0) + (fluxDR ? fluxDR[i] : 0)) * D
+                  - ((fluxUL ? fluxUL[i] : 0) + (fluxDL ? fluxDL[i] : 0)) * D) / wd;
+        const vy = (fluxD[i] - fluxU[i]
+                  + ((fluxDL ? fluxDL[i] : 0) + (fluxDR ? fluxDR[i] : 0)) * D
+                  - ((fluxUL ? fluxUL[i] : 0) + (fluxUR ? fluxUR[i] : 0)) * D) / wd;
         const mag = Math.sqrt(vx * vx + vy * vy);
         if (mag < 0.01) continue;
         const cx = g2sx(gx + 0.5);

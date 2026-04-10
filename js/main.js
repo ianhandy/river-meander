@@ -57,6 +57,10 @@ function initSim(startWithWater) {
   s.fluxR          = new Float32Array(N);
   s.fluxU          = new Float32Array(N);
   s.fluxD          = new Float32Array(N);
+  s.fluxUL         = new Float32Array(N);
+  s.fluxUR         = new Float32Array(N);
+  s.fluxDL         = new Float32Array(N);
+  s.fluxDR         = new Float32Array(N);
   s.flowSpeed      = new Float32Array(N);
   s.saturation     = new Float32Array(N);
   s.hydraulicHead  = new Float32Array(N);

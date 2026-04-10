@@ -25,11 +25,15 @@ const state = {
   hardness: null,      // Float32Array — material erosion resistance (derived)
   hardnessNoise: null, // Float32Array — per-cell noise for hardness variation
   //
-  // Flux (pipe model — 4 directional flow rates):
+  // Flux (pipe model — 8 directional flow rates):
   fluxL: null,         // Float32Array — leftward flux
   fluxR: null,         // Float32Array — rightward flux
   fluxU: null,         // Float32Array — upward flux
   fluxD: null,         // Float32Array — downward flux
+  fluxUL: null,        // Float32Array — upper-left diagonal flux
+  fluxUR: null,        // Float32Array — upper-right diagonal flux
+  fluxDL: null,        // Float32Array — lower-left diagonal flux
+  fluxDR: null,        // Float32Array — lower-right diagonal flux
   flowSpeed: null,     // Float32Array — velocity magnitude (derived from flux/depth)
   //
   // Delta buffers (zeroed each step, written by sim systems, applied once):

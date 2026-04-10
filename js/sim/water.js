@@ -40,8 +40,8 @@ import { getBeachiness } from '../util/helpers.js';
 const BED_GRAVITY_COEFF = 0.6;
 
 export function stepWater() {
-  const { terrain, water, fluxL, fluxR, fluxU, fluxD, flowSpeed,
-          saturation, isOceanCell, sources,
+  const { terrain, water, fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
+          flowSpeed, saturation, isOceanCell, sources,
           GW, GH, dt: rawDt, gravity, springRate,
           evapRate, absorbRate, stagnantEvapMult, stagnantAbsorbMult,
           movingEvapMult, movingAbsorbMult, damping,
@@ -50,6 +50,18 @@ export function stepWater() {
   const dt = Math.max(0.05, Math.min(1.0, rawDt));
   const g = gravity;
   const N = GW * GH;
+  const wThresh = state.waterThresh || 0.002;
+
+  // ── Kill invisible water ────────────────────────────────────────────────
+  // If it doesn't get rendered, it doesn't exist. This prevents invisible
+  // thin films from secretly draining pressure or creating ghost flows.
+  for (let i = 0; i < N; i++) {
+    if (water[i] > 0 && water[i] < wThresh && !isOceanCell[i]) {
+      water[i] = 0;
+      fluxL[i] = 0; fluxR[i] = 0; fluxU[i] = 0; fluxD[i] = 0;
+      fluxUL[i] = 0; fluxUR[i] = 0; fluxDL[i] = 0; fluxDR[i] = 0;
+    }
+  }
 
   // ── Inject water at sources ─────────────────────────────────────────────
   for (const src of sources) {
@@ -66,114 +78,100 @@ export function stepWater() {
     }
   }
 
-  // ── Pass 1: Update outflow fluxes ───────────────────────────────────────
+  // ── Pass 1: Update outflow fluxes (8 directions) ────────────────────────
   //
-  // For each cell, compute flux in 4 directions from:
-  //   f = damp * f_old + dt * g * surfaceDiff + bedGravity
-  //
-  // Then normalize so total outflow * dt <= available water.
+  // 8 flux channels: 4 cardinal + 4 diagonal.
+  // Diagonal flux weighted by 1/sqrt(2) ≈ 0.707 since the distance is longer.
+
+  const DIAG_W = 0.707; // 1/sqrt(2)
+  const AMP = state.fluxAmp;
+  const ATTRACT = state.streamAttract;
 
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
 
-      // Viscous damping: retain momentum from previous step
-      fluxL[i] *= damping;
-      fluxR[i] *= damping;
-      fluxU[i] *= damping;
-      fluxD[i] *= damping;
+      // Viscous damping
+      fluxL[i] *= damping; fluxR[i] *= damping;
+      fluxU[i] *= damping; fluxD[i] *= damping;
+      fluxUL[i] *= damping; fluxUR[i] *= damping;
+      fluxDL[i] *= damping; fluxDR[i] *= damping;
 
-      const h = terrain[i] + water[i]; // water surface elevation
+      const h = terrain[i] + water[i];
       const w = water[i];
-
-      // Bed gravity: water weight creates downhill pull
-      // Only active when cell actually has water (prevents phantom forces)
       const bedGrav = w > 0.0005 ? w * g * BED_GRAVITY_COEFF : 0;
 
-      // Nonlinear flux amplification: "winner take all" drainage.
-      // A cell that's even slightly lower gets disproportionately more flow.
-      //   nonlinear: force = surfaceDiff * (1 + |surfaceDiff| * AMP)
-      const AMP = state.fluxAmp;
-
-      // Stream attraction: if a neighbor already carries high flux (it's
-      // part of an active stream), boost our flux toward it. Water is
-      // drawn into existing channels like tributaries joining a river.
-      //   streamPull = neighborTotalFlux * ATTRACT
-      // This creates lateral capture — adjacent cells converge on the
-      // dominant flow path instead of flowing independently.
-      const ATTRACT = state.streamAttract;
-
-      // Helper: compute flux toward a neighbor.
-      // Steep downhill = boosted flux. Gentle slope = penalized.
-      // slopeBoost: terrain drop per cell. A drop of 0.1 = steep = boost 10x.
-      // A drop of 0.001 = gentle = boost 0.1x (penalty).
-      // Ocean neighbors always count as maximum relief (steep drop).
-      const calcFlux = (oldFlux, ni, isOcean_ni) => {
+      // Compute flux for one neighbor direction
+      const calcFlux = (oldFlux, ni, isOcean_ni, distWeight) => {
         const surfaceDiff = h - terrain[ni] - water[ni];
         const nlDiff = surfaceDiff * (1 + Math.abs(surfaceDiff) * AMP);
-        const bedSlope = terrain[i] - terrain[ni]; // positive = downhill
+        const bedSlope = terrain[i] - terrain[ni];
 
-        // Slope steepness factor: water wants the steepest path.
-        // Normalize bed slope: 0 = flat, 1 = very steep drop.
-        // Ocean = maximum steepness (full relief).
         let slopeBoost;
         if (isOcean_ni) {
-          slopeBoost = 10.0; // ocean is maximum relief
+          slopeBoost = 10.0;
         } else if (bedSlope > 0) {
-          // Downhill: strong preference for steepest drop.
-          // bedSlope 0.01 → boost 2, bedSlope 0.05 → boost 26, bedSlope 0.1 → boost 101
           slopeBoost = 1 + bedSlope * 1000;
         } else {
-          // Uphill: near-zero — water avoids going up
           slopeBoost = 0.02;
         }
 
-        const neighborFlux = fluxL[ni] + fluxR[ni] + fluxU[ni] + fluxD[ni];
-        const streamPull = neighborFlux * ATTRACT;
+        // Stream attraction: sum ALL 8 fluxes of neighbor
+        const nFlux = fluxL[ni] + fluxR[ni] + fluxU[ni] + fluxD[ni]
+                    + fluxUL[ni] + fluxUR[ni] + fluxDL[ni] + fluxDR[ni];
+        const streamPull = nFlux * ATTRACT;
 
-        return Math.max(0, oldFlux + (dt * g * nlDiff + bedGrav * Math.max(0, bedSlope)) * slopeBoost + streamPull);
+        const newFlux = oldFlux + (dt * g * nlDiff * distWeight + bedGrav * Math.max(0, bedSlope) * distWeight) * slopeBoost + streamPull * distWeight;
+
+        if (newFlux <= 0 && oldFlux > 0.001) {
+          return oldFlux * 0.85;
+        }
+        return Math.max(0, newFlux);
       };
 
-      // Right neighbor
-      if (x < GW - 1) {
-        const ni = i + 1;
-        fluxR[i] = calcFlux(fluxR[i], ni, isOceanCell[ni]);
-      } else {
-        fluxR[i] = Math.max(0, fluxR[i] + dt * g * w);
-      }
+      // 4 cardinal directions (weight 1.0)
+      if (x < GW - 1) fluxR[i] = calcFlux(fluxR[i], i + 1, isOceanCell[i + 1], 1);
+      else fluxR[i] = Math.max(0, fluxR[i] + dt * g * w);
 
-      // Left neighbor
-      if (x > 0) {
-        const ni = i - 1;
-        fluxL[i] = calcFlux(fluxL[i], ni, isOceanCell[ni]);
-      } else {
-        fluxL[i] = Math.max(0, fluxL[i] + dt * g * w);
-      }
+      if (x > 0) fluxL[i] = calcFlux(fluxL[i], i - 1, isOceanCell[i - 1], 1);
+      else fluxL[i] = Math.max(0, fluxL[i] + dt * g * w);
 
-      // Down neighbor
-      if (y < GH - 1) {
-        const ni = i + GW;
-        fluxD[i] = calcFlux(fluxD[i], ni, isOceanCell[ni]);
-      } else {
-        fluxD[i] = Math.max(0, fluxD[i] + dt * g * w);
-      }
+      if (y < GH - 1) fluxD[i] = calcFlux(fluxD[i], i + GW, isOceanCell[i + GW], 1);
+      else fluxD[i] = Math.max(0, fluxD[i] + dt * g * w);
 
-      // Up neighbor
-      if (y > 0) {
-        const ni = i - GW;
-        fluxU[i] = calcFlux(fluxU[i], ni, isOceanCell[ni]);
-      } else {
-        fluxU[i] = Math.max(0, fluxU[i] + dt * g * w);
-      }
+      if (y > 0) fluxU[i] = calcFlux(fluxU[i], i - GW, isOceanCell[i - GW], 1);
+      else fluxU[i] = Math.max(0, fluxU[i] + dt * g * w);
 
-      // Flux normalization: ensure outflow doesn't exceed available water
-      const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]) * dt;
+      // 4 diagonal directions (weight 0.707)
+      if (x > 0 && y > 0) {
+        const ni = i - GW - 1;
+        fluxUL[i] = calcFlux(fluxUL[i], ni, isOceanCell[ni], DIAG_W);
+      } else { fluxUL[i] = 0; }
+
+      if (x < GW - 1 && y > 0) {
+        const ni = i - GW + 1;
+        fluxUR[i] = calcFlux(fluxUR[i], ni, isOceanCell[ni], DIAG_W);
+      } else { fluxUR[i] = 0; }
+
+      if (x > 0 && y < GH - 1) {
+        const ni = i + GW - 1;
+        fluxDL[i] = calcFlux(fluxDL[i], ni, isOceanCell[ni], DIAG_W);
+      } else { fluxDL[i] = 0; }
+
+      if (x < GW - 1 && y < GH - 1) {
+        const ni = i + GW + 1;
+        fluxDR[i] = calcFlux(fluxDR[i], ni, isOceanCell[ni], DIAG_W);
+      } else { fluxDR[i] = 0; }
+
+      // Flux normalization: all 8 directions
+      const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]
+                      + fluxUL[i] + fluxUR[i] + fluxDL[i] + fluxDR[i]) * dt;
       if (totalOut > water[i] + MIN_WATER) {
         const scale = (water[i] + MIN_WATER) / totalOut;
-        fluxL[i] *= scale;
-        fluxR[i] *= scale;
-        fluxU[i] *= scale;
-        fluxD[i] *= scale;
+        fluxL[i] *= scale; fluxR[i] *= scale;
+        fluxU[i] *= scale; fluxD[i] *= scale;
+        fluxUL[i] *= scale; fluxUR[i] *= scale;
+        fluxDL[i] *= scale; fluxDR[i] *= scale;
       }
     }
   }
@@ -190,13 +188,20 @@ export function stepWater() {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
 
-      // Inflow from neighbors (their outflow toward us)
-      const inR = x > 0      ? fluxR[i - 1]  : 0;
-      const inL = x < GW - 1 ? fluxL[i + 1]  : 0;
-      const inD = y > 0      ? fluxD[i - GW]  : 0;
-      const inU = y < GH - 1 ? fluxU[i + GW]  : 0;
+      // Inflow from all 8 neighbors (their outflow toward us)
+      const inR  = x > 0                ? fluxR[i - 1]      : 0;
+      const inL  = x < GW - 1           ? fluxL[i + 1]      : 0;
+      const inD  = y > 0                ? fluxD[i - GW]      : 0;
+      const inU  = y < GH - 1           ? fluxU[i + GW]      : 0;
+      const inDR = (x > 0 && y > 0)     ? fluxDR[i - GW - 1] : 0;
+      const inDL = (x < GW-1 && y > 0)  ? fluxDL[i - GW + 1] : 0;
+      const inUR = (x > 0 && y < GH-1)  ? fluxUR[i + GW - 1] : 0;
+      const inUL = (x < GW-1 && y < GH-1) ? fluxUL[i + GW + 1] : 0;
 
-      const net = (inR + inL + inD + inU - fluxL[i] - fluxR[i] - fluxU[i] - fluxD[i]) * dt;
+      const totalIn = inR + inL + inD + inU + inDR + inDL + inUR + inUL;
+      const totalOutFlux = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]
+                         + fluxUL[i] + fluxUR[i] + fluxDL[i] + fluxDR[i];
+      const net = (totalIn - totalOutFlux) * dt;
       water[i] = Math.max(0, water[i] + net);
 
       if (isOceanCell[i]) {
@@ -209,41 +214,36 @@ export function stepWater() {
         }
       } else {
         // ── Velocity ──────────────────────────────────────────────────────
-        // Speed = how directional is the flow?
-        // A river has most flux going one way. A pool spreads evenly.
-        //
-        // Dominant flux: the largest single outgoing flux direction.
-        // Total flux: sum of all outgoing flux.
-        // Directionality: dominant / total. 1.0 = river, 0.25 = pool.
-        //
-        // Speed = (dominant flux) * directionality / depth
-        // This makes pools near-zero and rivers fast.
-        const fL = fluxL[i], fR = fluxR[i], fU = fluxU[i], fD = fluxD[i];
-        const totalFlux = fL + fR + fU + fD;
-        const dominant = Math.max(fL, fR, fU, fD);
-        const directionality = totalFlux > 0.0001 ? dominant / totalFlux : 0; // 0.25-1.0
-        // Only count as speed if flow is directional (> 0.5 = mostly one way)
+        // Directionality across all 8 flux channels.
+        // River = most flux in one direction. Pool = spread evenly.
+        const allFlux = [fluxL[i], fluxR[i], fluxU[i], fluxD[i],
+                         fluxUL[i], fluxUR[i], fluxDL[i], fluxDR[i]];
+        let totalFlux = 0, dominant = 0;
+        for (let f = 0; f < 8; f++) {
+          totalFlux += allFlux[f];
+          if (allFlux[f] > dominant) dominant = allFlux[f];
+        }
+        const directionality = totalFlux > 0.0001 ? dominant / totalFlux : 0; // 0.125-1.0
+        // Only count as speed if flow is directional (> 0.25 = mostly one way)
         const wd = Math.max(water[i], 0.01);
-        const spd = directionality > 0.35 ? dominant * (directionality - 0.25) / wd : 0;
+        const spd = directionality > 0.2 ? dominant * (directionality - 0.125) / wd : 0;
         flowSpeed[i] = flowSpeed[i] * 0.8 + spd * 0.2;
 
         // ── Stagnancy ─────────────────────────────────────────────────────
         // Smooth curve: 1.0 at rest, decays exponentially with speed
         const stagnancy = Math.exp(-flowSpeed[i] * 5);
 
-        // ── Evaporation ───────────────────────────────────────────────────
-        // Does this water have a real outlet? An outlet is ocean, or a
-        // neighbor that's ALREADY flowing (has significant outgoing flux).
-        // A gentle slope isn't an outlet — water needs to find an actual
-        // drain path, not just a slightly lower neighbor.
-        let hasOutlet = false;
+        // ── Is this water still filling or already overflowing? ──────────
+        // Filling = water surface below all neighbor terrain = trapped.
+        // Overflowing = water surface above at least one neighbor terrain.
+        // Filling water should NOT evaporate — it needs to rise.
+        const waterSurf = terrain[i] + water[i];
+        let isOverflowing = false;
         if (water[i] > 0) {
           for (const ni of [i-1, i+1, i-GW, i+GW]) {
             if (ni < 0 || ni >= GW * GH) continue;
-            if (isOceanCell[ni]) { hasOutlet = true; break; }
-            // A neighbor is an outlet if it's already part of a flowing stream
-            const nFlux = fluxL[ni] + fluxR[ni] + fluxU[ni] + fluxD[ni];
-            if (nFlux > 0.05 && terrain[ni] < terrain[i]) { hasOutlet = true; break; }
+            if (isOceanCell[ni]) { isOverflowing = true; break; }
+            if (waterSurf > terrain[ni]) { isOverflowing = true; break; }
           }
         }
 
@@ -252,8 +252,9 @@ export function stepWater() {
           const evapMult = movingEvapMult + stagnancy * stagnantEvapMult;
           let evapFrac = evapRate * evapMult;
 
-          if (!hasOutlet) {
-            evapFrac *= 0.02; // contained — barely evaporates
+          if (!isOverflowing) {
+            // Still filling — don't evaporate. Water must rise.
+            evapFrac = 0;
           }
 
           water[i] *= (1 - Math.min(0.5, evapFrac));
@@ -268,8 +269,8 @@ export function stepWater() {
           const beachBoost = 1 + beach * 15;
           let absorbFrac = absorbRate * absorbMult * (1.0 - saturation[i]) * beachBoost;
 
-          // Contained water saturates the ground — stops absorbing
-          if (!hasOutlet || (stagnancy > 0.9 && water[i] > 0.01)) {
+          // Filling water saturates the ground — stops absorbing
+          if (!isOverflowing || (stagnancy > 0.9 && water[i] > 0.01)) {
             saturation[i] = 1.0;
             absorbFrac = 0;
           }

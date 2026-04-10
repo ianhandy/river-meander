@@ -109,7 +109,7 @@ function saveDevSettings() {
   localStorage.setItem('riverMeanderDev', JSON.stringify(settings));
 }
 
-const SETTINGS_VERSION = 19; // bump to invalidate stale localStorage
+const SETTINGS_VERSION = 23; // bump to invalidate stale localStorage
 
 function loadDevSettings() {
   try {

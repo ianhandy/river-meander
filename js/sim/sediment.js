@@ -38,11 +38,11 @@ const SETTLE_SPEED_MAX = 0.02; // speed below which settling occurs
 
 export function stepSediment() {
   const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD,
+          fluxUL, fluxUR, fluxDL, fluxDR,
           flowSpeed, GW, GH } = state;
   const N = GW * GH;
 
-  // ── Flux-weighted transport ─────────────────────────────────────────────
-  // Snapshot prevents order-dependent cascade.
+  // ── Flux-weighted transport (8 directions) ──────────────────────────────
   const snap = sediment.slice();
 
   for (let y = 1; y < GH - 1; y++) {
@@ -50,14 +50,19 @@ export function stepSediment() {
       const i = y * GW + x;
       if (snap[i] < 1e-5 || water[i] < MIN_WATER) continue;
 
-      const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i];
+      const totalOut = fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]
+                     + fluxUL[i] + fluxUR[i] + fluxDL[i] + fluxDR[i];
       if (totalOut < 1e-8) continue;
 
       const moved = Math.min(snap[i] * TRANSPORT_FRAC, snap[i]);
-      if (fluxR[i] > 0 && x < GW - 1) snap[i + 1]  += moved * fluxR[i] / totalOut;
-      if (fluxL[i] > 0 && x > 0)       snap[i - 1]  += moved * fluxL[i] / totalOut;
-      if (fluxD[i] > 0 && y < GH - 1) snap[i + GW] += moved * fluxD[i] / totalOut;
-      if (fluxU[i] > 0 && y > 0)       snap[i - GW] += moved * fluxU[i] / totalOut;
+      if (fluxR[i] > 0 && x < GW - 1)              snap[i + 1]      += moved * fluxR[i] / totalOut;
+      if (fluxL[i] > 0 && x > 0)                    snap[i - 1]      += moved * fluxL[i] / totalOut;
+      if (fluxD[i] > 0 && y < GH - 1)               snap[i + GW]     += moved * fluxD[i] / totalOut;
+      if (fluxU[i] > 0 && y > 0)                     snap[i - GW]     += moved * fluxU[i] / totalOut;
+      if (fluxUL[i] > 0 && x > 0 && y > 0)           snap[i - GW - 1] += moved * fluxUL[i] / totalOut;
+      if (fluxUR[i] > 0 && x < GW - 1 && y > 0)      snap[i - GW + 1] += moved * fluxUR[i] / totalOut;
+      if (fluxDL[i] > 0 && x > 0 && y < GH - 1)      snap[i + GW - 1] += moved * fluxDL[i] / totalOut;
+      if (fluxDR[i] > 0 && x < GW - 1 && y < GH - 1) snap[i + GW + 1] += moved * fluxDR[i] / totalOut;
       snap[i] -= moved;
     }
   }

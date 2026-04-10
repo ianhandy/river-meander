@@ -59,7 +59,7 @@ export const PARAMS = {
     group: 'water',
   },
   evapRate: {
-    val: 0.03, min: 0, max: 0.2, step: 0.002,
+    val: 0.005, min: 0, max: 0.2, step: 0.001,
     unit: '1/step',
     desc: 'Base evaporation fraction. Multiplied by stagnancy: still water evaporates faster.',
     group: 'water',
@@ -71,7 +71,7 @@ export const PARAMS = {
     group: 'water',
   },
   stagnantEvapMult: {
-    val: 5.0, min: 0, max: 10.0, step: 0.1,
+    val: 2.0, min: 0, max: 10.0, step: 0.1,
     unit: '',
     desc: 'Evaporation multiplier for stagnant water (speed ~ 0). Added to movingEvapMult weighted by stagnancy.',
     group: 'water',
@@ -207,6 +207,42 @@ export const PARAMS = {
     val: 0.0001, min: 0, max: 0.05, step: 0.0001,
     unit: 'm',
     desc: 'Minimum water depth to render. Higher = hides thin films, shows only real channels.',
+    group: 'display',
+  },
+  waterAlphaMin: {
+    val: 0.8, min: 0, max: 1.0, step: 0.01,
+    unit: '',
+    desc: 'Minimum water opacity. 0 = thin water invisible, 1 = all water fully opaque.',
+    group: 'display',
+  },
+  waterAlphaDepth: {
+    val: 0.23, min: 0, max: 1.0, step: 0.01,
+    unit: '',
+    desc: 'How much depth adds to opacity. Higher = deep water much more opaque than shallow.',
+    group: 'display',
+  },
+  waterColorR: {
+    val: 30, min: 0, max: 255, step: 1,
+    unit: '',
+    desc: 'Water base color — red channel (0-255). Lower = bluer.',
+    group: 'display',
+  },
+  waterColorG: {
+    val: 100, min: 0, max: 255, step: 1,
+    unit: '',
+    desc: 'Water base color — green channel (0-255).',
+    group: 'display',
+  },
+  waterColorB: {
+    val: 145, min: 0, max: 255, step: 1,
+    unit: '',
+    desc: 'Water base color — blue channel (0-255).',
+    group: 'display',
+  },
+  waterSmoothing: {
+    val: 3, min: 0, max: 10, step: 1,
+    unit: 'passes',
+    desc: 'Water edge softening passes. Higher = smoother edges, nearby dots merge into blobs.',
     group: 'display',
   },
 

@@ -26,7 +26,7 @@ import { MIN_WATER } from '../data/constants.js';
 import { getHardness, getBeachiness } from '../util/helpers.js';
 
 export function stepStreamPower() {
-  const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD,
+  const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
           origTerrain, isOceanCell, terrainDelta, sedimentDelta, flowSpeed,
           GW, GH, erodibilityUI, seaLevel,
           K, Kc, Kd, gravity, asymmetry,
@@ -46,10 +46,15 @@ export function stepStreamPower() {
       const speed = flowSpeed[i];
       if (speed < erodeSpeedMin) continue;
 
-      // ── Flow direction from flux ────────────────────────────────────────
+      // ── Flow direction from 8-directional flux ────────────────────────
       const wd = Math.max(water[i], 0.01);
-      const vx = ((fluxR[i - 1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i + 1] || 0)) * 0.5 / wd;
-      const vy = ((fluxD[i - GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i + GW] || 0)) * 0.5 / wd;
+      const D = 0.707; // diagonal component
+      // Net x velocity: rightward fluxes minus leftward, including diagonals
+      const vx = (fluxR[i] - fluxL[i]
+                + (fluxUR[i] + fluxDR[i]) * D - (fluxUL[i] + fluxDL[i]) * D) / wd;
+      // Net y velocity: downward fluxes minus upward, including diagonals
+      const vy = (fluxD[i] - fluxU[i]
+                + (fluxDL[i] + fluxDR[i]) * D - (fluxUL[i] + fluxUR[i]) * D) / wd;
       const rawSpeed = Math.sqrt(vx * vx + vy * vy);
       if (rawSpeed < 0.001) continue; // no direction
 
@@ -60,7 +65,13 @@ export function stepStreamPower() {
       // Flow direction (normalized)
       let fnx = vx / rawSpeed, fny = vy / rawSpeed;
 
-      // (Pool breakthrough pressure is handled by stepBreakthrough, not here)
+      // ── Flow directionality ────────────────────────────────────────────
+      // How concentrated is the flow? 0.125 = pool (8-way spread), 1.0 = river
+      const allF = [fluxL[i], fluxR[i], fluxU[i], fluxD[i],
+                    fluxUL[i], fluxUR[i], fluxDL[i], fluxDR[i]];
+      let totFlux = 0, domFlux = 0;
+      for (let f = 0; f < 8; f++) { totFlux += allF[f]; if (allF[f] > domFlux) domFlux = allF[f]; }
+      const directionality = totFlux > 0.0001 ? domFlux / totFlux : 0;
 
       // ── Carrying capacity ───────────────────────────────────────────────
       const C_eq = Kc * speed * Math.sqrt(water[i]);
@@ -99,17 +110,22 @@ export function stepStreamPower() {
           if (nx < 1 || nx >= GW - 1 || ny < 1 || ny >= GH - 1) continue;
           const bi = ny * GW + nx;
 
-          // Only erode DRY walls — wet neighbors are part of the same
-          // water body, not walls. This prevents adjacent wet cells from
-          // eroding each other downward (the hole-digging bug).
-          if (water[bi] > 0.005) continue; // neighbor is wet, skip
-
-          // How much does this neighbor stick up as a "wall"?
+          // A "wall" is any neighbor with higher TERRAIN than us.
+          // It can be wet or dry — what matters is the terrain difference.
+          // The submergedFrac check below prevents hole-digging: we can only
+          // erode the part of the wall that's below our water surface.
           const wallHeight = terrain[bi] - terrain[i];
-          if (wallHeight < -0.01) continue; // lower than us, not a wall
+          if (wallHeight < 0.002) continue; // not significantly higher, not a wall
 
-          // Is this wall higher than the water surface? (contained)
-          const contained = terrain[bi] > waterSurface;
+          // Stream can only erode the submerged portion of the wall.
+          // submergedFrac: 1.0 = wall fully under water, 0.0 = wall fully above.
+          // A thin stream barely reaches the base of a tall wall.
+          const wallTop = terrain[bi];
+          const wallBase = terrain[i]; // channel floor
+          const submerged = Math.min(waterSurface, wallTop) - wallBase;
+          const wallTotal = wallTop - wallBase;
+          const submergedFrac = wallTotal > 0.001 ? Math.max(0, submerged / wallTotal) : 0;
+          if (submergedFrac < 0.01) continue; // water doesn't reach this wall
 
           // ── Perpendicularity ────────────────────────────────────────────
           // How head-on is the flow hitting this wall?
@@ -130,23 +146,24 @@ export function stepStreamPower() {
           // Momentum impact: how much flux was heading toward this wall?
           // The flux in that direction represents momentum that gets killed
           // when it hits the wall — that energy becomes erosion force.
+          // Momentum: use the actual flux channel pointing toward this neighbor
           let momentumToward = 0;
-          if (dx === 1)  momentumToward = fluxR[i];
-          else if (dx === -1) momentumToward = fluxL[i];
-          else if (dy === 1)  momentumToward = fluxD[i];
-          else if (dy === -1) momentumToward = fluxU[i];
-          else {
-            // Diagonal: average the two cardinal components
-            momentumToward = ((dx > 0 ? fluxR[i] : fluxL[i]) +
-                              (dy > 0 ? fluxD[i] : fluxU[i])) * 0.5;
-          }
+          if (dx === 1 && dy === 0)       momentumToward = fluxR[i];
+          else if (dx === -1 && dy === 0) momentumToward = fluxL[i];
+          else if (dx === 0 && dy === 1)  momentumToward = fluxD[i];
+          else if (dx === 0 && dy === -1) momentumToward = fluxU[i];
+          else if (dx === -1 && dy === -1) momentumToward = fluxUL[i];
+          else if (dx === 1 && dy === -1)  momentumToward = fluxUR[i];
+          else if (dx === -1 && dy === 1)  momentumToward = fluxDL[i];
+          else if (dx === 1 && dy === 1)   momentumToward = fluxDR[i];
 
           const wallH = getHardness(bi);
-          // Force = pressure + momentum impact, shaped by perpendicularity
-          let force = K * erodMult * (pressure + momentumToward * 50) * interaction * distW / wallH;
+          // Force = (pressure + momentum) * perpendicularity * submerged fraction
+          // Thin concentrated streams: high momentum, low submerged = focused cut at base
+          let force = K * erodMult * (pressure + momentumToward * 50) * interaction * submergedFrac * distW / wallH;
 
-          // Deeper moving water has more force
-          force *= (1 + water[i] * 10);
+          // Concentrated flow bonus: high directionality = more punch
+          force *= (0.5 + directionality * 2); // concentrated = up to 2.5x
 
           // Meander asymmetry: outer bank erodes more on curves
           const cross = fnx * ndy - fny * ndx;
@@ -163,8 +180,9 @@ export function stepStreamPower() {
           //
           // Split: 70% collapses as terrain into channel (fills the hole),
           //        30% becomes suspended sediment (carried downstream).
-          const maxErode = Math.max(0, terrain[bi] - terrain[i]);
-          const eroded = Math.min(force * deficit, 0.005, maxErode);
+          // Can't erode bank below the water surface — only the submerged part
+          const maxErode = Math.max(0, terrain[bi] - Math.max(terrain[i], waterSurface - water[i]));
+          const eroded = Math.min(force * deficit, 0.003, maxErode);
           if (eroded > 0.00001) {
             terrainDelta[bi] -= eroded;           // bank lowers
             terrainDelta[i] += eroded * 0.7;      // 70% collapses into channel
@@ -172,7 +190,20 @@ export function stepStreamPower() {
           }
         }
 
-        // No vertical erosion — channels deepen only via diffusion.
+        // ── Vertical erosion — only for directional flow ─────────────────
+        // High directionality = real river, not a pool. Only rivers cut down.
+        // Capped very shallow so it carves a channel, not a canyon.
+        if (directionality > 0.5) {
+          const vertForce = K * erodMult * pressure * (directionality - 0.5) * 2 / getHardness(i);
+          const maxDepth = 0.005 + Math.min(0.03, speed * 0.1);
+          const absFloor = origTerrain[i] - maxDepth;
+          const vertDelta = Math.min(vertForce * deficit, 0.001) * beachDamp;
+          const actualVert = Math.min(vertDelta, Math.max(0, terrain[i] - absFloor));
+          if (actualVert > 0.00001) {
+            terrainDelta[i] -= actualVert;
+            sedimentDelta[i] += actualVert;
+          }
+        }
 
       } else {
         // ── Deposition ────────────────────────────────────────────────────
