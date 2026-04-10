@@ -1,7 +1,7 @@
 // Shared helpers used by both simulation and rendering
 
-import state from './state.js';
-import { LAYERS } from './constants.js';
+import state from '../data/state.js';
+import { LAYERS } from '../data/constants.js';
 
 // Effective depth in the layer stack: combines elevation + erosion.
 // High terrain = deep in stack (bedrock), low terrain = shallow (alluvium).
@@ -18,11 +18,10 @@ function effectiveDepth(i) {
 // Beach = near sea level, close to ocean, not submerged.
 export function getBeachiness(i) {
   const { terrain, isOceanCell, seaLevel, GW, GH } = state;
-  if (!isOceanCell || isOceanCell[i]) return 0; // ocean itself isn't beach
+  if (!isOceanCell || isOceanCell[i]) return 0;
   const elevAboveSea = terrain[i] - seaLevel;
-  if (elevAboveSea < 0 || elevAboveSea > 0.06) return 0; // too high or submerged
+  if (elevAboveSea < 0 || elevAboveSea > 0.06) return 0;
 
-  // Must be near ocean (within 3 cells)
   const x = i % GW, y = (i / GW) | 0;
   let nearOcean = false;
   for (let dy = -3; dy <= 3 && !nearOcean; dy++) {
@@ -34,7 +33,6 @@ export function getBeachiness(i) {
   }
   if (!nearOcean) return 0;
 
-  // Stronger beachiness closer to sea level
   return Math.max(0, 1 - elevAboveSea / 0.06);
 }
 
@@ -51,9 +49,8 @@ export function getHardness(i) {
   const noiseVal = hardnessNoise ? hardnessNoise[i] : 0.5;
   let h = baseHardness * (0.6 + noiseVal * 0.8);
 
-  // Beach sand: very soft (malleable) but stable (see erosion for stability)
   const beach = getBeachiness(i);
-  if (beach > 0) h = h * (1 - beach) + 0.5 * beach; // blend toward sand hardness
+  if (beach > 0) h = h * (1 - beach) + 0.5 * beach;
 
   return h;
 }

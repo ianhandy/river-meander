@@ -1,25 +1,40 @@
-// Main — boot sequence, initSim, main loop
+/**
+ * main.js — Boot sequence, initialization, and main simulation loop.
+ *
+ * ARCHITECTURE:
+ *   initSim() allocates all grid arrays and generates terrain.
+ *   loop() runs the simulation pipeline and renders each frame.
+ *   Simulation and rendering are decoupled: sim always runs,
+ *   render is skipped when sim eats too much of the frame budget.
+ *
+ * STEP ORDER (per frame):
+ *   1. Tectonics (every TECTONIC_INTERVAL steps)
+ *   2. Pipeline step (water → erosion → diffusion → breakthrough → apply → sediment)
+ *   3. Periodic maintenance (oxbow detection, hydraulic head)
+ *   4. Render (2D or 3D, skipped if over budget)
+ */
 
-import state from './state.js';
+import state from './data/state.js';
 import { UI_H, MOUNTAIN_THRESHOLD, MAX_SOURCES, YEARS_PER_STEP,
-         FRAME_MS, TECTONIC_INTERVAL, RAINFALL_MAX } from './constants.js';
+         FRAME_MS, TECTONIC_INTERVAL, RAINFALL_MAX } from './data/constants.js';
 import { generateTerrain } from './terrain.js';
-import { computeOceanCells, computeDrainDistance, computeHydraulicHead } from './ocean.js';
-import { getHardness } from './helpers.js';
-import { stepHydraulic } from './hydraulics.js';
-import { stepErosion, detectOxbows } from './erosion.js';
-import { stepTectonics } from './tectonics.js';
-import { render } from './render2d.js';
-import { render3D } from './render3d.js';
-import { initUI } from './ui.js';
-import { initModal, setInitSim } from './modal.js';
-import { initTools } from './tools.js';
+import { computeOceanCells, computeDrainDistance, computeHydraulicHead } from './util/ocean.js';
+import { getHardness } from './util/helpers.js';
+import { step as pipelineStep } from './sim/pipeline.js';
+import { stepTectonics } from './sim/tectonics.js';
+import { detectOxbows } from './sim/oxbow.js';
+import { render } from './render/render2d.js';
+import { render3D } from './render/render3d.js';
+import { initUI } from './ui/controls.js';
+import { initModal, setInitSim } from './ui/modal.js';
+import { initTools } from './ui/tools.js';
+import { initEquationsPanel } from './ui/equations-panel.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const c3d = document.getElementById('c3d');
 
-// ── initSim ──
+// ── initSim ──────────────────────────────────────────────────────────────────
 
 function initSim(startWithWater) {
   const s = state;
@@ -33,17 +48,21 @@ function initSim(startWithWater) {
   s.origTerrain = s.terrain.slice();
   computeOceanCells();
   computeDrainDistance();
-  s.water       = new Float32Array(N);
-  s.sediment    = new Float32Array(N);
-  s.hardness    = new Float32Array(N);
-  s.fluxL = new Float32Array(N);
-  s.fluxR = new Float32Array(N);
-  s.fluxU = new Float32Array(N);
-  s.fluxD = new Float32Array(N);
-  s.saturation = new Float32Array(N);
-  s.flowSpeed = new Float32Array(N);
-  s.hydraulicHead = new Float32Array(N);
+
+  // Allocate all grid arrays
+  s.water          = new Float32Array(N);
+  s.sediment       = new Float32Array(N);
+  s.hardness       = new Float32Array(N);
+  s.fluxL          = new Float32Array(N);
+  s.fluxR          = new Float32Array(N);
+  s.fluxU          = new Float32Array(N);
+  s.fluxD          = new Float32Array(N);
+  s.flowSpeed      = new Float32Array(N);
+  s.saturation     = new Float32Array(N);
+  s.hydraulicHead  = new Float32Array(N);
   s.trappedPressure = new Float32Array(N);
+  s.terrainDelta   = new Float32Array(N);
+  s.sedimentDelta  = new Float32Array(N);
 
   for (let i = 0; i < N; i++) s.hardness[i] = getHardness(i);
 
@@ -89,7 +108,7 @@ function initSim(startWithWater) {
       }
       bestAccum.sort((a, b) => b.accum - a.accum);
       for (let si = 0; si < Math.min(bestAccum.length, MAX_SOURCES); si++) {
-        s.sources.push({ gx: bestAccum[si].x, gy: bestAccum[si].y, rate: s.SIM_SPRING_RATE });
+        s.sources.push({ gx: bestAccum[si].x, gy: bestAccum[si].y, rate: s.springRate });
       }
     }
 
@@ -100,7 +119,7 @@ function initSim(startWithWater) {
         const h = s.terrain[y * GW];
         if (h < minH && !(s.terrain[y * GW] < s.seaLevel)) { minH = h; srcY = y; }
       }
-      s.sources = [{ gx: 0, gy: srcY, rate: s.SIM_SPRING_RATE }];
+      s.sources = [{ gx: 0, gy: srcY, rate: s.springRate }];
     }
   }
 
@@ -115,7 +134,7 @@ function initSim(startWithWater) {
   if (yr2) yr2.textContent = '0';
   if (sd2) sd2.textContent = s.currentSeed;
 
-  // Reset 3D — force back to 2D terrain view
+  // Reset 3D
   s.glInited = false;
   if (s.viewMode === '3d') {
     s.viewMode = 'terrain';
@@ -126,12 +145,9 @@ function initSim(startWithWater) {
   }
 }
 
-// Inject initSim into modal to avoid circular import
 setInitSim(initSim);
 
-// ── Main loop ──
-// Sim and render are decoupled: sim runs first, render only if time remains.
-// This lets the browser breathe between frames.
+// ── Main loop ────────────────────────────────────────────────────────────────
 
 let _prevTs = 0;
 let _renderSkips = 0;
@@ -140,17 +156,14 @@ function loop(ts) {
   requestAnimationFrame(loop);
   if (!state.running || !state.terrain) return;
 
-  // Measure actual frame time
   const elapsed = ts - _prevTs;
-  if (elapsed < FRAME_MS) return; // rate limit
+  if (elapsed < FRAME_MS) return;
   _prevTs = ts;
 
-  // FPS-aware step count
   const actualFPS = elapsed > 0 ? 1000 / elapsed : 30;
   let steps = state.realtimeMode ? 1 : Math.max(1, Math.round(state.speedUI / 10));
   if (actualFPS < 10 && steps > 1) steps = 1;
 
-  // Sim step(s)
   const simStart = performance.now();
   let maxDepth = 0;
   for (let s = 0; s < steps; s++) {
@@ -159,8 +172,7 @@ function loop(ts) {
       stepTectonics();
       state.stepsSinceTectonics = 0;
     }
-    maxDepth = stepHydraulic();
-    stepErosion();
+    maxDepth = pipelineStep();
     state.year += YEARS_PER_STEP;
     state.stepsSinceOxbowCheck++;
   }
@@ -173,8 +185,8 @@ function loop(ts) {
 
   if (state.stepsSinceOxbowCheck % 10 === 0) computeHydraulicHead();
 
-  // Update stats — show elapsed time instead of years
-  const totalSec = Math.floor(state.year / YEARS_PER_STEP / 30); // approx real seconds at 30fps
+  // Update stats display
+  const totalSec = Math.floor(state.year / YEARS_PER_STEP / 30);
   const mins = Math.floor(totalSec / 60);
   const secs = totalSec % 60;
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
@@ -184,12 +196,11 @@ function loop(ts) {
   const yr2el = document.getElementById('yr2');
   if (yr2el) yr2el.textContent = `${yrStr}yr`;
 
-  // Render only if sim didn't eat the whole frame budget.
-  // Skip render every other frame if sim is taking >50% of budget.
+  // Render (skip if sim is too slow)
   const budget = FRAME_MS;
   if (simMs > budget * 0.7) {
     _renderSkips++;
-    if (_renderSkips % 2 === 0) return; // skip every other render when slow
+    if (_renderSkips % 2 === 0) return;
   } else {
     _renderSkips = 0;
   }
@@ -201,11 +212,10 @@ function loop(ts) {
   }
 }
 
-// ── Resize ──
+// ── Resize ───────────────────────────────────────────────────────────────────
 
 function resize() {
   const screenSize = Math.min(window.innerWidth, window.innerHeight - UI_H);
-  // Cap internal resolution for performance — CSS scales to screen size
   const maxRes = Math.min(screenSize, 1200);
   canvas.style.width = screenSize + 'px';
   canvas.style.height = screenSize + 'px';
@@ -226,16 +236,16 @@ function resize() {
   }
 }
 
-// ── Boot ──
+// ── Boot ─────────────────────────────────────────────────────────────────────
 
 initUI(c3d);
 initModal();
 initTools(canvas);
+initEquationsPanel();
 window.addEventListener('resize', resize);
 resize();
 requestAnimationFrame(loop);
 
-// Fade hint after 4 seconds
 setTimeout(() => {
   const h = document.getElementById('hint');
   if (h) h.classList.add('faded');

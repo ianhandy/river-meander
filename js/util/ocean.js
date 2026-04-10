@@ -1,6 +1,6 @@
 // Ocean connectivity, drain distance, hydraulic head
 
-import state from './state.js';
+import state from '../data/state.js';
 
 // BFS flood fill: below-sea-level cells connected to map edge = ocean
 export function computeOceanCells() {
@@ -77,13 +77,12 @@ export function computeDrainDistance() {
 // Propagate hydraulic head from ocean upstream via connected water
 export function computeHydraulicHead() {
   const { GW, GH, terrain, water, isOceanCell, hydraulicHead,
-          trappedPressure, seaLevel, SIM_GRAVITY } = state;
+          trappedPressure, seaLevel, gravity } = state;
   const N = GW * GH;
   const WATER_CONNECT_THRESH = 0.0005;
   const SLOPE_PER_CELL = 0.0003;
   hydraulicHead.fill(Infinity);
 
-  // Use typed array queue to avoid JS array length limits on large grids
   const queue = new Int32Array(N);
   let qHead = 0, qTail = 0;
 
@@ -118,7 +117,7 @@ export function computeHydraulicHead() {
   for (let i = 0; i < N; i++) {
     if (hydraulicHead[i] === Infinity) {
       hydraulicHead[i] = terrain[i] + water[i];
-      trappedPressure[i] = water[i] * SIM_GRAVITY;
+      trappedPressure[i] = water[i] * gravity;
     } else {
       trappedPressure[i] = 0;
     }

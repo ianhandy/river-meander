@@ -346,6 +346,37 @@
 
   /* Hidden elements that JS needs but shouldn't display in main UI */
   #ui { display: none; }
+
+  /* ── Equation tooltip ── */
+  .eq-tooltip {
+    position: fixed; pointer-events: none;
+    background: rgba(13,17,23,0.96); backdrop-filter: blur(10px);
+    border: 1px solid #1f6feb; border-radius: 6px;
+    padding: 8px 12px; font-size: 10px; line-height: 1.6;
+    color: #c9d1d9; z-index: 40; white-space: pre;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    max-width: 420px; min-width: 280px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  }
+  .eq-tooltip.hidden { display: none; }
+  .eq-title { color: #58a6ff; font-weight: 600; font-size: 10px; margin-bottom: 2px; }
+  .eq-formula { color: #3d6fa5; font-size: 9px; margin-bottom: 4px; }
+  .eq-line { display: flex; gap: 8px; }
+  .eq-var { color: #8b949e; min-width: 50px; }
+  .eq-val { color: #58a6ff; font-variant-numeric: tabular-nums; }
+  .eq-spacer { height: 4px; }
+  .eq-divider { border-bottom: 1px solid #21262d; margin: 6px 0; }
+  .eq-divider:last-child { display: none; }
+
+  /* ── Dev panel auto-generated rows ── */
+  .dev-group-header {
+    font-size: 8px; color: #3d6fa5; margin: 8px 0 3px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .dev-group-header:first-child { margin-top: 0; }
+  .dev-slider { flex: 1; width: 48px; }
+  .dev-unit { font-size: 7px; color: #30363d; min-width: 30px; }
 </style>
 </head>
 <body>
@@ -415,6 +446,8 @@
     <button id="btn-pressure">Pressure</button>
     <button id="btn-velocity">Velocity</button>
     <button id="btn-faults">Faults</button>
+    <button id="btn-equations" title="Show equations on hover (E key)">Equations</button>
+    <button id="btn-streams" title="Highlight active stream paths in pink">Streams</button>
   </div>
 </div>
 
@@ -495,7 +528,7 @@
     <button class="dev-preset" data-preset="5">Preset 6</button>
   </div>
   <div style="margin-bottom:5px">
-    <button style="width:100%;padding:3px;font-size:7px;background:#161b22;border:1px solid #21262d;color:#484f58;border-radius:3px;cursor:pointer;font-family:inherit">Reset All Defaults</button>
+    <button id="dev-reset" style="width:100%;padding:3px;font-size:7px;background:#161b22;border:1px solid #21262d;color:#484f58;border-radius:3px;cursor:pointer;font-family:inherit">Reset All Defaults</button>
   </div>
 
   <h4>Display</h4>
@@ -518,188 +551,12 @@
     <input type="range" id="flow-rate" min="1" max="500" value="40">
   </div>
 
-  <h4>Flow Physics</h4>
-  <div class="dev-row">
-    <label>Gravity <span class="dev-help" title="How fast water accelerates downhill.">?</span></label>
-    <input type="range" id="dev-gravity" min="1" max="50" step="1" value="10">
-    <span class="dev-val" id="dev-gravity-val">10.0</span>
-  </div>
-  <div class="dev-row">
-    <label>Timestep <span class="dev-help" title="Sim time per step. Higher = faster but less stable.">?</span></label>
-    <input type="range" id="dev-dt" min="0.05" max="1.0" step="0.05" value="0.35">
-    <span class="dev-val" id="dev-dt-val">0.35</span>
-  </div>
-  <div class="dev-row">
-    <label>Spring Rate <span class="dev-help" title="Water produced per source per step.">?</span></label>
-    <input type="range" id="dev-spring" min="0.001" max="0.1" step="0.001" value="0.02">
-    <span class="dev-val" id="dev-spring-val">0.020</span>
-  </div>
-  <div class="dev-row">
-    <label>Viscous Damp <span class="dev-help" title="Flux momentum. Lower = water slows faster.">?</span></label>
-    <input type="range" id="dev-viscous" min="0.80" max="0.99" step="0.01" value="0.98">
-    <span class="dev-val" id="dev-viscous-val">0.98</span>
-  </div>
-
-  <h4>Water Loss</h4>
-  <div class="dev-row">
-    <label>Evaporation <span class="dev-help" title="Surface water loss from thin films.">?</span></label>
-    <input type="range" id="dev-evap" min="0" max="0.05" step="0.001" value="0.01">
-    <span class="dev-val" id="dev-evap-val">0.010</span>
-  </div>
-  <div class="dev-row">
-    <label>Absorption <span class="dev-help" title="Water soaking into ground.">?</span></label>
-    <input type="range" id="dev-absorb" min="0" max="0.01" step="0.0002" value="0.001">
-    <span class="dev-val" id="dev-absorb-val">0.0010</span>
-  </div>
-  <div class="dev-sub-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">Stagnant / Moving</div>
-  <div class="dev-subgroup">
-    <div class="dev-row">
-      <label>Still Evap <span class="dev-help" title="Evap multiplier for stagnant water. Pools and puddles evaporate faster.">?</span></label>
-      <input type="range" id="dev-stag-evap" min="0" max="5" step="0.1" value="3.0">
-      <span class="dev-val" id="dev-stag-evap-val">3.0</span>
-    </div>
-    <div class="dev-row">
-      <label>Still Absorb <span class="dev-help" title="Absorption multiplier for stagnant water. Still water soaks in faster.">?</span></label>
-      <input type="range" id="dev-stag-absorb" min="0" max="2" step="0.05" value="2.0">
-      <span class="dev-val" id="dev-stag-absorb-val">2.00</span>
-    </div>
-    <div class="dev-row">
-      <label>Flow Evap <span class="dev-help" title="Evap baseline for flowing water. Rivers evaporate less than pools.">?</span></label>
-      <input type="range" id="dev-move-evap" min="0" max="1" step="0.01" value="0.1">
-      <span class="dev-val" id="dev-move-evap-val">0.100</span>
-    </div>
-    <div class="dev-row">
-      <label>Flow Absorb <span class="dev-help" title="Absorption baseline for flowing water. Fast rivers resist soaking in.">?</span></label>
-      <input type="range" id="dev-move-absorb" min="0" max="1" step="0.01" value="0.05">
-      <span class="dev-val" id="dev-move-absorb-val">0.050</span>
-    </div>
-  </div>
-
-  <h4>Erosion</h4>
-  <div class="dev-row">
-    <label>Water Min <span class="dev-help" title="Minimum water depth for erosion to occur. Below this, terrain is stable.">?</span></label>
-    <input type="range" id="dev-erode-wmin" min="0" max="0.01" step="0.0001" value="0.0001">
-    <span class="dev-val" id="dev-erode-wmin-val">0.0001</span>
-  </div>
-  <div class="dev-row">
-    <label>Speed Min <span class="dev-help" title="Minimum flow speed for erosion. Below this, water is too stagnant to erode.">?</span></label>
-    <input type="range" id="dev-erode-smin" min="0" max="0.05" step="0.001" value="0.001">
-    <span class="dev-val" id="dev-erode-smin-val">0.001</span>
-  </div>
-  <div class="dev-row">
-    <label>Capacity <span class="dev-help" title="Sediment transport capacity.">?</span></label>
-    <input type="range" id="dev-kc" min="0.01" max="0.5" step="0.01" value="0.15">
-    <span class="dev-val" id="dev-kc-val">0.15</span>
-  </div>
-  <div class="dev-row">
-    <label>Erosion <span class="dev-help" title="Base erosion rate, divided by hardness.">?</span></label>
-    <input type="range" id="dev-ks" min="0.01" max="0.3" step="0.01" value="0.08">
-    <span class="dev-val" id="dev-ks-val">0.080</span>
-  </div>
-  <div class="dev-row">
-    <label>Deposition <span class="dev-help" title="Rate sediment settles to terrain.">?</span></label>
-    <input type="range" id="dev-kd" min="0.001" max="0.05" step="0.001" value="0.02">
-    <span class="dev-val" id="dev-kd-val">0.020</span>
-  </div>
-  <div class="dev-row">
-    <label>Smoothing <span class="dev-help" title="Passive thermal erosion.">?</span></label>
-    <input type="range" id="dev-kt" min="0" max="0.03" step="0.001" value="0.005">
-    <span class="dev-val" id="dev-kt-val">0.005</span>
-  </div>
-  <div class="dev-row">
-    <label>Slope Collapse <span class="dev-help" title="Rockfall above angle of repose.">?</span></label>
-    <input type="range" id="dev-slope" min="0" max="100" step="1" value="5">
-    <span class="dev-val" id="dev-slope-val">5</span>
-  </div>
-  <div class="dev-row">
-    <label>Talus Noise <span class="dev-help" title="Randomness of rockslide debris distribution. 0 = uniform, 100 = very chaotic.">?</span></label>
-    <input type="range" id="dev-talus-noise" min="0" max="100" step="1" value="80">
-    <span class="dev-val" id="dev-talus-noise-val">80</span>
-  </div>
-  <div class="dev-row">
-    <label>Repose Min <span class="dev-help" title="Minimum angle of repose (height diff per cell). Below this, slopes are stable.">?</span></label>
-    <input type="range" id="dev-repose-min" min="0.005" max="0.1" step="0.001" value="0.02">
-    <span class="dev-val" id="dev-repose-min-val">0.020</span>
-  </div>
-  <div class="dev-row">
-    <label>Repose Max <span class="dev-help" title="Maximum angle of repose. Each cell gets a random threshold between min and max — creates varied cliff stability.">?</span></label>
-    <input type="range" id="dev-repose-max" min="0.005" max="0.1" step="0.001" value="0.05">
-    <span class="dev-val" id="dev-repose-max-val">0.050</span>
-  </div>
-  <div class="dev-row">
-    <label>Vert Erode</label>
-    <button id="btn-vert-erode" class="active">Vert Erode</button>
-  </div>
-
-  <h4>Meander</h4>
-  <div class="dev-row">
-    <label>Asymmetry <span class="dev-help" title="Outer/inner bank erosion ratio.">?</span></label>
-    <input type="range" id="dev-asymmetry" min="1" max="6" step="0.1" value="2.0">
-    <span class="dev-val" id="dev-asymmetry-val">2.0</span>
-  </div>
-  <div class="dev-row">
-    <label>Lateral Rate <span class="dev-help" title="Bank erosion strength.">?</span></label>
-    <input type="range" id="dev-lateral" min="0.2" max="20" step="0.1" value="1.5">
-    <span class="dev-val" id="dev-lateral-val">1.5</span>
-  </div>
-  <div class="dev-sub-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">Still / Flowing</div>
-  <div class="dev-subgroup">
-    <div class="dev-row">
-      <label>Still Lateral <span class="dev-help" title="Lateral erosion multiplier for stagnant water. Pools slowly widen their banks.">?</span></label>
-      <input type="range" id="dev-lat-stag" min="0" max="2" step="0.05" value="0.1">
-      <span class="dev-val" id="dev-lat-stag-val">0.10</span>
-    </div>
-    <div class="dev-row">
-      <label>Flow Lateral <span class="dev-help" title="Lateral erosion multiplier for flowing water. Rivers cut wider channels.">?</span></label>
-      <input type="range" id="dev-lat-move" min="0" max="3" step="0.05" value="1.0">
-      <span class="dev-val" id="dev-lat-move-val">1.00</span>
-    </div>
-  </div>
-
-  <h4>Tectonics</h4>
-  <div class="dev-row">
-    <label>Plate Speed <span class="dev-help" title="Tectonic drift speed.">?</span></label>
-    <input type="range" id="dev-tspeed" min="0" max="1.0" step="0.01" value="0.0">
-    <span class="dev-val" id="dev-tspeed-val">0.0</span>
-  </div>
-  <div class="dev-row">
-    <label>Uplift Rate <span class="dev-help" title="Mountain building at convergent boundaries.">?</span></label>
-    <input type="range" id="dev-uplift" min="0" max="0.005" step="0.0001" value="0.005">
-    <span class="dev-val" id="dev-uplift-val">0.005</span>
-  </div>
-  <div class="dev-row">
-    <label>Rift Rate <span class="dev-help" title="Valley formation at divergent boundaries.">?</span></label>
-    <input type="range" id="dev-rift" min="0" max="0.003" step="0.0001" value="0.0004">
-    <span class="dev-val" id="dev-rift-val">0.0004</span>
-  </div>
-  <div class="dev-row">
-    <label>Quake Thresh <span class="dev-help" title="Stress threshold before earthquake.">?</span></label>
-    <input type="range" id="dev-quake" min="0.5" max="5.0" step="0.1" value="2.0">
-    <span class="dev-val" id="dev-quake-val">2.0</span>
-  </div>
-  <div class="dev-row">
-    <label>Fault Erosion <span class="dev-help" title="Extra weathering at fault zones.">?</span></label>
-    <input type="range" id="dev-ferode" min="0" max="0.05" step="0.001" value="0.01">
-    <span class="dev-val" id="dev-ferode-val">0.010</span>
-  </div>
-
-  <h4>Rendering</h4>
-  <div class="dev-row">
-    <label>Height Scale</label>
-    <input type="range" id="dev-hscale" min="0.05" max="1.0" step="0.05" value="0.25">
-    <span class="dev-val" id="dev-hscale-val">0.25</span>
-  </div>
-  <div class="dev-row">
-    <label>Water Thresh <span class="dev-help" title="Min water depth to render.">?</span></label>
-    <input type="range" id="dev-wthresh" min="0.0001" max="0.02" step="0.0001" value="0.001">
-    <span class="dev-val" id="dev-wthresh-val">0.0010</span>
-  </div>
-  <div class="dev-row">
-    <label>Pressure Wt <span class="dev-help" title="Water depth contribution to erosion.">?</span></label>
-    <input type="range" id="dev-pw" min="0" max="1.0" step="0.05" value="0.3">
-    <span class="dev-val" id="dev-pw-val">0.30</span>
-  </div>
+  <!-- Auto-generated sliders from PARAMS registry -->
+  <div id="dev-sliders"></div>
 </div>
+
+<!-- Equation tooltip (positioned by JS) -->
+<div id="eq-tooltip" class="eq-tooltip hidden"></div>
 
 <!-- ── Generation modal ── -->
 <div id="gen-overlay" class="hidden">
@@ -714,6 +571,7 @@
       <label>Type</label>
       <div class="gen-types">
         <button class="gen-type-btn" data-type="test">Test</button>
+        <button class="gen-type-btn" data-type="drainage">Drain</button>
         <button class="gen-type-btn active" data-type="river_valley">Valley</button>
         <button class="gen-type-btn" data-type="floodplain">Flood</button>
         <button class="gen-type-btn" data-type="island">Island</button>
@@ -747,6 +605,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=14"></script>
 </body>
 </html>

@@ -1,8 +1,9 @@
 // Canvas interactions — pan, zoom, carve, source placement, cell inspector
 
-import state from './state.js';
-import { LAYERS, LAYER_NAMES } from './constants.js';
-import { layerColor } from './helpers.js';
+import state from '../data/state.js';
+import { LAYERS } from '../data/constants.js';
+import { layerColor } from '../util/helpers.js';
+import { updateEquationsTooltip, hideEquationsTooltip } from './equations-panel.js';
 
 export function initTools(canvas) {
 
@@ -16,13 +17,11 @@ export function initTools(canvas) {
     return { gx, gy, clientX: e.clientX, clientY: e.clientY };
   }
 
-  // ── Tool panel state ──
-  let activeToolMode = 'pan'; // 'pan' | 'carve' | 'flow'
-  let carveAdd = false;       // false = dig, true = raise
+  let activeToolMode = 'pan';
+  let carveAdd = false;
   let carveSize = 3;
-  let carveStrength = 0.04;   // mapped from slider 1-100
+  let carveStrength = 0.04;
 
-  // Tool panel elements
   const btnPan = document.getElementById('tbtn-pan');
   const btnCarve = document.getElementById('tbtn-carve');
   const btnFlow = document.getElementById('tbtn-flow');
@@ -41,8 +40,7 @@ export function initTools(canvas) {
     btnFlow.classList.toggle('active', mode === 'flow');
     carveOpts.style.display = mode === 'carve' ? '' : 'none';
     canvas.style.cursor = mode === 'carve' ? 'crosshair'
-                        : mode === 'flow' ? 'pointer'
-                        : 'grab';
+                        : mode === 'flow' ? 'pointer' : 'grab';
   }
 
   btnPan.addEventListener('click', () => setToolMode('pan'));
@@ -69,7 +67,6 @@ export function initTools(canvas) {
     carveStrVal.textContent = carveStrSlider.value;
   });
 
-  // Keyboard shortcuts still work
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 't' || e.key === 'T') { setToolMode('carve'); e.preventDefault(); }
@@ -77,10 +74,8 @@ export function initTools(canvas) {
     if (e.key === 'Escape') { setToolMode('pan'); }
   });
 
-  // ── Carving ──
-
   function carveAt(gx, gy) {
-    const { terrain, origTerrain, GW, GH } = state;
+    const { terrain, GW, GH } = state;
     const r = carveSize;
     const sign = carveAdd ? 1 : -1;
     for (let dy = -r; dy <= r; dy++) {
@@ -92,17 +87,12 @@ export function initTools(canvas) {
         const falloff = 1 - dd / (r + 0.5);
         const idx = iy * GW + ix;
         terrain[idx] += sign * carveStrength * falloff;
-        if (carveAdd) {
-          // Don't raise above a reasonable cap
-          terrain[idx] = Math.min(1.5, terrain[idx]);
-        } else {
-          terrain[idx] = Math.max(0.01, terrain[idx]);
-        }
+        terrain[idx] = carveAdd ? Math.min(1.5, terrain[idx]) : Math.max(0.01, terrain[idx]);
       }
     }
   }
 
-  // ── Source editor ──
+  // Source editor
   const srcEditor = document.getElementById('source-editor');
   const srcRateSlider = document.getElementById('se-rate');
   const srcRateVal = document.getElementById('se-rate-val');
@@ -155,7 +145,6 @@ export function initTools(canvas) {
     }
   });
 
-  // ── Canvas mousedown ──
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !state.terrain) return;
     const { gx, gy, clientX, clientY } = canvasToGrid(e);
@@ -178,13 +167,11 @@ export function initTools(canvas) {
       return;
     }
 
-    // Shift+click always adds source regardless of mode
     if (e.shiftKey) {
       state.sources.push({ gx, gy, rate: 0.06 });
       return;
     }
 
-    // Pan (default)
     state.isPanning = true;
     state.panStartX = e.clientX;
     state.panStartY = e.clientY;
@@ -194,7 +181,6 @@ export function initTools(canvas) {
     e.preventDefault();
   });
 
-  // Click-and-hold carving
   window.addEventListener('mousemove', (e) => {
     if (state.isCarving && state.terrain) {
       const { gx, gy } = canvasToGrid(e);
@@ -206,7 +192,7 @@ export function initTools(canvas) {
     if (state.isCarving) state.isCarving = false;
   });
 
-  // ── Cell inspector ──
+  // ── Cell inspector + equation tooltip ──────────────────────────────────
   const cellInfoEl = document.getElementById('cell-info');
   let cellInfoTimer = null;
   let lastInspectCell = -1;
@@ -225,6 +211,15 @@ export function initTools(canvas) {
     if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) { cellInfoEl.style.display = 'none'; return; }
 
     const i = gy * GW + gx;
+    state.hoveredCell = i;
+
+    // If equations mode, show equation tooltip instead
+    if (state.showEquations) {
+      cellInfoEl.style.display = 'none';
+      updateEquationsTooltip(clientX, clientY);
+      return;
+    }
+
     const h = terrain[i];
     const w = water ? water[i] : 0;
     const sat = saturation ? saturation[i] : 0;
@@ -232,8 +227,8 @@ export function initTools(canvas) {
     let layerName = 'Unknown';
     try {
       const lc = layerColor(i);
-      const layerIdx = LAYERS.indexOf(lc);
-      layerName = LAYER_NAMES[layerIdx] || 'Unknown';
+      const layerIdx = LAYERS.findIndex(l => l === lc);
+      layerName = lc.name || 'Unknown';
     } catch(e) {}
     const erosionDepth = Math.max(0, origTerrain[i] - h);
     const ocean = isOceanCell ? isOceanCell[i] : false;
@@ -270,7 +265,9 @@ export function initTools(canvas) {
 
     if (state.isPanning || state.isCarving || state.isDraggingTool) {
       cellInfoEl.style.display = 'none';
+      hideEquationsTooltip();
       lastInspectCell = -1;
+      state.hoveredCell = -1;
       return;
     }
 
@@ -282,29 +279,37 @@ export function initTools(canvas) {
     const gy = (state.camY + my * viewSize) | 0;
     const cell = gy * state.GW + gx;
 
-    if (cell === lastInspectCell && cellInfoEl.style.display === 'block') {
-      let left = e.clientX + 15;
-      let top = e.clientY - 10;
-      if (left + 200 > window.innerWidth) left = e.clientX - 210;
-      if (top + 150 > window.innerHeight) top = e.clientY - 150;
-      cellInfoEl.style.left = left + 'px';
-      cellInfoEl.style.top = top + 'px';
+    if (cell === lastInspectCell && (cellInfoEl.style.display === 'block' || state.showEquations)) {
+      // Just update position
+      if (state.showEquations) {
+        updateEquationsTooltip(e.clientX, e.clientY);
+      } else {
+        let left = e.clientX + 15;
+        let top = e.clientY - 10;
+        if (left + 200 > window.innerWidth) left = e.clientX - 210;
+        if (top + 150 > window.innerHeight) top = e.clientY - 150;
+        cellInfoEl.style.left = left + 'px';
+        cellInfoEl.style.top = top + 'px';
+      }
       return;
     }
 
     lastInspectCell = cell;
     cellInfoEl.style.display = 'none';
+    hideEquationsTooltip();
     if (cellInfoTimer) clearTimeout(cellInfoTimer);
     cellInfoTimer = setTimeout(() => showCellInfo(lastMouseX, lastMouseY), 200);
   });
 
   canvas.addEventListener('mouseleave', () => {
     cellInfoEl.style.display = 'none';
+    hideEquationsTooltip();
     lastInspectCell = -1;
+    state.hoveredCell = -1;
     if (cellInfoTimer) { clearTimeout(cellInfoTimer); cellInfoTimer = null; }
   });
 
-  // ── Legacy toolbar drag (kept for source drag from old toolbar) ──
+  // Legacy toolbar drag
   const dragGhost = document.getElementById('drag-ghost');
   const toolSource = document.getElementById('tool-source');
   if (toolSource) {
@@ -337,14 +342,14 @@ export function initTools(canvas) {
         const gx = (state.camX + mx * viewSize) | 0;
         const gy = (state.camY + my * viewSize) | 0;
         if (gx >= 0 && gx < state.GW && gy >= 0 && gy < state.GH) {
-          state.sources.push({ gx, gy, rate: state.SIM_SPRING_RATE });
+          state.sources.push({ gx, gy, rate: state.springRate });
         }
       }
     }
     state.dragToolType = null;
   });
 
-  // ── Zoom ──
+  // Zoom
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
@@ -360,7 +365,7 @@ export function initTools(canvas) {
     clampCam();
   }, { passive: false });
 
-  // ── Pan ──
+  // Pan
   window.addEventListener('mousemove', (e) => {
     if (!state.isPanning) return;
     const viewSize = state.GW / state.camZoom;
@@ -375,12 +380,10 @@ export function initTools(canvas) {
     if (state.isPanning) {
       state.isPanning = false;
       canvas.style.cursor = activeToolMode === 'carve' ? 'crosshair'
-                          : activeToolMode === 'flow' ? 'pointer'
-                          : 'grab';
+                          : activeToolMode === 'flow' ? 'pointer' : 'grab';
     }
   });
 
-  // Set initial mode
   setToolMode('pan');
 }
 

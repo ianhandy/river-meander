@@ -1,9 +1,9 @@
 // Terrain generation — all terrain types including particle erosion pre-pass
 
-import state from './state.js';
-import { LAYERS } from './constants.js';
-import { seedNoise, simplex2D, fbmSimplex, ridgedNoise, warpedRidged } from './noise.js';
-import { lerp, smoothstep } from './math.js';
+import state from './data/state.js';
+import { LAYERS } from './data/constants.js';
+import { seedNoise, simplex2D, fbmSimplex, ridgedNoise, warpedRidged } from './util/noise.js';
+import { lerp, smoothstep } from './util/math.js';
 
 export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type, seaLvl, mtnHeight, forceOcean) {
   seedNoise(seed);
@@ -14,38 +14,40 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
   const hn = new Float32Array(N);
   const gain = 0.35 + roughness * 0.3;
 
-  // ── Test preset: 25x25 controlled slope ──
-  // Lake at top, ocean at bottom, clear slope between. Water source feeds lake.
-  if (type === 'test') {
+  // ── Drainage test: smooth slope from top (high) to bottom (ocean) ──
+  // Simple north-to-south drainage. Hill at top, ocean across the entire
+  // bottom edge. Water flows straight down with gentle lateral noise.
+  // Source placed at the top feeds a river that must carve its own path.
+  if (type === 'drainage') {
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
         const i = y * GW + x;
-        const fy = y / GH; // 0 = top, 1 = bottom
+        const fx = x / GW, fy = y / GH;
 
-        // Linear slope: high at top (0.6), low at bottom (0.1)
-        let h = lerp(0.6, 0.1, fy);
+        // Simple north-to-south slope: high at top (fy=0), low at bottom (fy=1)
+        let h = 0.55 - fy * 0.45;
 
-        // Lake depression at top center (top 25% of map)
-        if (fy < 0.28) {
-          const cx = (x / GW - 0.5) * 2; // -1 to 1
-          const cy = (fy / 0.28 - 0.5) * 2;
-          const dist = Math.sqrt(cx * cx * 0.6 + cy * cy);
-          if (dist < 0.7) {
-            h -= (0.7 - dist) * 0.15; // depression
-          }
+        // Gentle lateral undulation — creates natural valley tendencies
+        h += simplex2D(fx * 3 + seed * 0.1, fy * 3 + seed * 0.2) * 0.03;
+        h += simplex2D(fx * 6 + seed * 0.3, fy * 6 + seed * 0.4) * 0.01;
+
+        // Subtle micro-texture
+        h += simplex2D(fx * 20 + seed * 0.5, fy * 20 + seed * 0.6) * 0.002;
+
+        // Ocean across the entire bottom edge
+        if (fy > 0.85) {
+          const depth = (fy - 0.85) / 0.15;
+          h -= depth * 0.3;
         }
 
-        // Slight channel down the center to guide flow
-        const distFromCenter = Math.abs(x / GW - 0.5);
-        if (distFromCenter < 0.15) {
-          h -= (0.15 - distFromCenter) * 0.08;
+        // Slight ridges on left and right edges (keeps water in the middle)
+        const edgeDist = Math.min(fx, 1 - fx);
+        if (edgeDist < 0.08) {
+          h += (0.08 - edgeDist) * 0.5;
         }
-
-        // Tiny micro-variation for visual interest
-        h += simplex2D(x * 0.5 + seed * 0.1, y * 0.5 + seed * 0.2) * 0.005;
 
         t[i] = Math.max(0.01, h);
-        hn[i] = 0.5;
+        hn[i] = simplex2D(fx * 12 + 100, fy * 12 + 100) * 0.5 + 0.5;
       }
     }
 
@@ -57,7 +59,35 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     return t;
   }
 
-  // ── Floodplain: clean generation, bypasses tectonic/erosion pipeline ──
+  // ── Test preset: 25x25 controlled slope ──
+  if (type === 'test') {
+    for (let y = 0; y < GH; y++) {
+      for (let x = 0; x < GW; x++) {
+        const i = y * GW + x;
+        const fy = y / GH;
+        let h = lerp(0.6, 0.1, fy);
+        if (fy < 0.28) {
+          const cx = (x / GW - 0.5) * 2;
+          const cy = (fy / 0.28 - 0.5) * 2;
+          const dist = Math.sqrt(cx * cx * 0.6 + cy * cy);
+          if (dist < 0.7) h -= (0.7 - dist) * 0.15;
+        }
+        const distFromCenter = Math.abs(x / GW - 0.5);
+        if (distFromCenter < 0.15) h -= (0.15 - distFromCenter) * 0.08;
+        h += simplex2D(x * 0.5 + seed * 0.1, y * 0.5 + seed * 0.2) * 0.005;
+        t[i] = Math.max(0.01, h);
+        hn[i] = 0.5;
+      }
+    }
+    state.hardnessNoise = hn;
+    state.initialFlowAccum = null;
+    state.plates = [];
+    state.tectonicStress = new Float32Array(N);
+    state.faultStress = new Float32Array(N);
+    return t;
+  }
+
+  // ── Floodplain: clean generation ──
   if (type === 'floodplain') {
     const valleyY = new Float32Array(GW);
     for (let x = 0; x < GW; x++) {
@@ -65,7 +95,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       valleyY[x] = (0.5 + simplex2D(fx * 3 + seed * 0.1, 0.5) * 0.06
                         + simplex2D(fx * 7 + seed * 0.2, 0.5) * 0.02) * GH;
     }
-
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
         const fx = x / GW;
@@ -80,8 +109,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         hn[i] = simplex2D(fx * 12 + 100, (y / GH) * 12 + 100) * 0.5 + 0.5;
       }
     }
-
-    // Pre-carve sinuous channel
     for (let x = 0; x < GW; x++) {
       const cy = Math.round(valleyY[x]);
       for (let dy = -2; dy <= 2; dy++) {
@@ -91,8 +118,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         t[y * GW + x] -= 0.04 * falloff;
       }
     }
-
-    // Fill micro-depressions
     for (let pass = 0; pass < 10; pass++) {
       for (let y = 1; y < GH - 1; y++) {
         for (let x = 1; x < GW - 1; x++) {
@@ -102,7 +127,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         }
       }
     }
-
     state.hardnessNoise = hn;
     state.initialFlowAccum = null;
     state.plates = [];
@@ -116,8 +140,7 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
   if (type === 'island') { numPlates = 2; hasContinentalMask = true; }
   else if (type === 'continent') { numPlates = 3; hasContinentalMask = true; }
   else if (type === 'mountain_range') { numPlates = 2; hasContinentalMask = false; }
-  else if (type === 'floodplain') { numPlates = 2; hasContinentalMask = false; }
-  else { numPlates = 2; hasContinentalMask = false; } // river_valley
+  else { numPlates = 2; hasContinentalMask = false; }
   if (genNumPlates > 0) numPlates = genNumPlates;
 
   const plates = [];
@@ -138,7 +161,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       const fx = x / GW, fy = y / GH;
-      // Strong warp for natural, curved fault lines (not straight Voronoi edges)
       const warpAmt = Math.max(GW, GH) * 0.08;
       const warpX = x + simplex2D(fx * 2 + 300, fy * 2 + 300) * warpAmt;
       const warpY = y + simplex2D(fx * 2 + 400, fy * 2 + 400) * warpAmt;
@@ -150,8 +172,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         else if (d < d2) { d2 = d; p2 = p; }
       }
       const boundaryDist = Math.abs(d1 - d2);
-      // Wide falloff = broad mountain ranges, not thin ridges
-      // Scale with grid size so it works at any resolution
       const falloffWidth = Math.max(GW, GH) * 0.15;
       const boundaryProx = Math.exp(-boundaryDist * boundaryDist / (falloffWidth * falloffWidth));
       const relVx = plates[p1].vx - plates[p2].vx;
@@ -164,7 +184,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     }
   }
 
-  // Smooth stress field
   for (let pass = 0; pass < 20; pass++) {
     for (let y = 1; y < GH - 1; y++) {
       for (let x = 1; x < GW - 1; x++) {
@@ -175,7 +194,7 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     }
   }
 
-  // ── Step 2: Build heightmap from noise modulated by stress ──
+  // ── Step 2: Build heightmap ──
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const fx = x / GW, fy = y / GH;
@@ -253,7 +272,7 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
   const range = mx - mn || 1;
   for (let i = 0; i < N; i++) t[i] = (t[i] - mn) / range;
 
-  // ── Force ocean in corner ──
+  // Force ocean in corner
   if (forceOcean) {
     const corners = [
       { cx: 0, cy: 0 }, { cx: GW-1, cy: 0 },
@@ -272,7 +291,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       }
       if (sum / count < bestAvg) { bestAvg = sum / count; bestCorner = c; }
     }
-
     const ocx = corners[bestCorner].cx, ocy = corners[bestCorner].cy;
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
@@ -289,7 +307,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
         t[y * GW + x] = Math.max(0.01, t[y * GW + x]);
       }
     }
-
     mn = Infinity; mx = -Infinity;
     for (let i = 0; i < N; i++) { if (t[i] < mn) mn = t[i]; if (t[i] > mx) mx = t[i]; }
     const range2 = mx - mn || 1;
@@ -319,7 +336,7 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     }
   }
 
-  // ── Particle hydraulic erosion pre-pass ──
+  // Particle hydraulic erosion pre-pass
   const NUM_PARTICLES = Math.round(GW * GH * genErosionPasses);
   const P_INERTIA = 0.4, P_CAPACITY = 6.0, P_DEPOSITION = 0.03;
   const P_EROSION = 0.015, P_EVAP = 0.005, P_GRAVITY = 10;
@@ -390,7 +407,7 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     }
   }
 
-  // Smooth pockmarks from particle erosion
+  // Smooth pockmarks
   for (let pass = 0; pass < 6; pass++) {
     for (let y = 1; y < GH - 1; y++) {
       for (let x = 1; x < GW - 1; x++) {

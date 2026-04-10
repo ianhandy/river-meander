@@ -1,9 +1,9 @@
 // Canvas 2D renderer — full resolution with bicubic terrain interpolation
 
-import state from './state.js';
-import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from './constants.js';
-import { lerp, sampleGrid, sampleGridFast, elevColor } from './math.js';
-import { layerColor, getBeachiness } from './helpers.js';
+import state from '../data/state.js';
+import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from '../data/constants.js';
+import { lerp, sampleGrid, sampleGridFast, elevColor } from '../util/math.js';
+import { layerColor, getBeachiness } from '../util/helpers.js';
 
 export function render(canvas, ctx, maxDepth) {
   const { terrain, water, isOceanCell, saturation, hardnessNoise,
@@ -11,7 +11,7 @@ export function render(canvas, ctx, maxDepth) {
           fluxL, fluxR, fluxU, fluxD,
           GW, GH, seaLevel, camX, camY, camZoom,
           viewMode, showContours, showLayers, showPressure, showVelocity,
-          showFaultLines, SIM_WATER_THRESH, SIM_GRAVITY,
+          showFaultLines, showStreams, waterThresh, gravity,
           waterOpacityUI } = state;
 
   const W = canvas.width, H = canvas.height;
@@ -19,20 +19,8 @@ export function render(canvas, ctx, maxDepth) {
   if (!state.imgFull || state.imgFull.width !== W || state.imgFull.height !== H) {
     state.imgFull = ctx.createImageData(W, H);
   }
-  if (!state.waterSmooth || state.waterSmooth.length !== N) {
-    state.waterSmooth = new Float32Array(N);
-  }
-
-  // Light water smoothing — one pass, mostly preserves shape
-  state.waterSmooth.set(water);
-  const ws = state.waterSmooth;
-  for (let y = 1; y < GH - 1; y++) {
-    for (let x = 1; x < GW - 1; x++) {
-      const i = y * GW + x;
-      ws[i] = water[i] * 0.7 +
-        (water[i-1] + water[i+1] + water[i-GW] + water[i+GW]) * 0.075;
-    }
-  }
+  // waterSmooth is computed in pipeline.js every step
+  const ws = state.waterSmooth || water;
 
   const d = state.imgFull.data;
   const REF_DEPTH = 0.04;
@@ -40,11 +28,10 @@ export function render(canvas, ctx, maxDepth) {
   const pxToGrid = viewSize / W;
   const pyToGrid = viewSize / H;
 
-  // Compute stats for overlays (5-number summary of active data)
-  // Stats: sample every 10th cell for performance (O(n) instead of O(n log n) sort)
+  // Compute stats for overlays
   let statMin = Infinity, statMax = -Infinity, statSum = 0, statCount = 0;
   const statSamples = [];
-  const sampleStride = Math.max(1, Math.floor(N / 5000)); // cap at ~5000 samples
+  const sampleStride = Math.max(1, Math.floor(N / 5000));
   if (showVelocity && flowSpeed) {
     for (let i = 0; i < N; i++) {
       if (water[i] > 0.001) {
@@ -155,18 +142,26 @@ export function render(canvas, ctx, maxDepth) {
         }
       }
 
-      // Water overlay
-      if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : SIM_WATER_THRESH)) {
+      // Water overlay — depth contrast curve
+      // Thin films (sheet flow) render nearly invisible. Only concentrated
+      // water in channels and pools shows as blue. This makes rivers pop
+      // against the terrain instead of everything being a uniform wash.
+      //
+      // Curve: alpha = depth^2.5 — steep ramp that suppresses thin films
+      // but lets deep channels show strongly.
+      if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : waterThresh)) {
         const depth = Math.min(1, w / REF_DEPTH);
-        // Quick ramp to visible, then gradual increase with depth
-        const alpha = Math.min(1, 0.6 + depth * 0.4) * waterOpacityUI;
+        // Any water above the threshold is visible. Deeper = more opaque.
+        // Minimum alpha of 0.15 so thin water is faint but never invisible.
+        const alpha = isOcean
+          ? Math.min(1, 0.6 + depth * 0.4) * waterOpacityUI
+          : Math.min(1, 0.15 + depth * 0.85) * waterOpacityUI;
 
         let wr, wg, wb;
         if (showPressure) {
-          const pN = Math.min(1, w * SIM_GRAVITY * 1.5);
+          const pN = Math.min(1, w * gravity * 1.5);
           wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
         } else if (showVelocity) {
-          // Smooth velocity sampling + auto-scale to 95th percentile
           let rawSpd = flowSpeed ? flowSpeed[ci] : 0;
           if (flowSpeed && ci > GW && ci < N - GW) {
             rawSpd = (flowSpeed[ci] * 0.4 +
@@ -190,13 +185,29 @@ export function render(canvas, ctx, maxDepth) {
         tb = tb * (1 - a) + wb * a | 0;
       }
 
+      // Stream highlight — pink overlay on cells with high total flux.
+      // Shows where water is actively flowing as a stream (attracting neighbors).
+      // Excludes ocean cells. Uses flow speed * flux to highlight moving streams,
+      // not stagnant pools or the ocean basin.
+      if (showStreams && fluxL && fluxR && fluxU && fluxD && !isOcean && water[ci] > 0.001) {
+        const totalFlux = fluxL[ci] + fluxR[ci] + fluxU[ci] + fluxD[ci];
+        const spd = flowSpeed ? flowSpeed[ci] : 0;
+        const streamScore = totalFlux * spd; // high flux AND high speed = active stream
+        if (streamScore > 0.001) {
+          const intensity = Math.min(1, streamScore * 20);
+          const sa = intensity * 0.7;
+          tr = tr * (1 - sa) + 255 * sa | 0;
+          tg = tg * (1 - sa) +  60 * sa | 0;
+          tb = tb * (1 - sa) + 200 * sa | 0;
+        }
+      }
+
       d[off] = tr; d[off+1] = tg; d[off+2] = tb; d[off+3] = 255;
     }
   }
 
   ctx.putImageData(state.imgFull, 0, 0);
 
-  // Helper: grid coords → screen coords
   const g2sx = gx => (gx - camX) / viewSize * W;
   const g2sy = gy => (gy - camY) / viewSize * H;
   const cellPx = W / viewSize;
@@ -223,42 +234,32 @@ export function render(canvas, ctx, maxDepth) {
     ctx.globalAlpha = 1;
   }
 
-  // Flow direction arrows (when velocity overlay is on)
+  // Flow direction arrows
   if (showVelocity && fluxL && fluxR && fluxU && fluxD) {
-    // Draw arrows every N cells based on zoom level
     const arrowSpacing = Math.max(2, Math.floor(4 / camZoom));
     ctx.strokeStyle = 'rgba(255,255,255,0.6)';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.lineWidth = 1;
-
     for (let gy = arrowSpacing; gy < GH - 1; gy += arrowSpacing) {
       for (let gx = arrowSpacing; gx < GW - 1; gx += arrowSpacing) {
         const i = gy * GW + gx;
         if (water[i] < 0.001) continue;
-
         const wd = Math.max(water[i], 0.001);
         const vx = ((fluxR[i-1] || 0) - fluxL[i] + fluxR[i] - (fluxL[i+1] || 0)) * 0.5 / wd;
         const vy = ((fluxD[i-GW] || 0) - fluxU[i] + fluxD[i] - (fluxU[i+GW] || 0)) * 0.5 / wd;
         const mag = Math.sqrt(vx * vx + vy * vy);
         if (mag < 0.01) continue;
-
         const cx = g2sx(gx + 0.5);
         const cy = g2sy(gy + 0.5);
         if (cx < 0 || cx > W || cy < 0 || cy > H) continue;
-
-        // Arrow length scales with speed, capped at 1.5 cells
         const arrowLen = Math.min(cellPx * 1.5, cellPx * 0.3 + (mag / (velScale || 1)) * cellPx);
         const nx = vx / mag, ny = vy / mag;
         const ex = cx + nx * arrowLen;
         const ey = cy + ny * arrowLen;
-
-        // Line
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(ex, ey);
         ctx.stroke();
-
-        // Arrowhead
         const headLen = Math.min(4, arrowLen * 0.35);
         const ax = -nx * headLen, ay = -ny * headLen;
         ctx.beginPath();
@@ -283,7 +284,7 @@ export function render(canvas, ctx, maxDepth) {
     ctx.stroke();
   }
 
-  // 5-number summary stats overlay for pressure/velocity views
+  // 5-number stats overlay
   if ((showPressure || showVelocity) && statCount > 0) {
     const label = showVelocity ? 'Velocity' : 'Pressure';
     const fmt = v => v < 0.001 ? v.toExponential(1) : v < 1 ? v.toFixed(3) : v.toFixed(1);
