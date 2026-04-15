@@ -369,6 +369,10 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
           // Valley walls: quadratic rise (U-shaped cross-section)
           const vt = (dist - CHANNEL_R) / (VALLEY_R - CHANNEL_R);
           h = riverH + BANK_H + vt * vt * VALLEY_H;
+          // Subtle noise breaks up the perfect mathematical contour lines.
+          // Amplitude grows from 0 at the channel bank to full at the rim.
+          h += simplex2D(fx * 15 + seed * 0.7, fy * 15 + seed * 0.8) * 0.004 * vt;
+          h += simplex2D(fx * 8 + seed * 0.9, fy * 8 + seed * 1.1) * 0.002 * vt;
         } else {
           // Outer terrain
           const outerDist = dist - VALLEY_R;
@@ -376,16 +380,18 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
           h = riverH + BANK_H + VALLEY_H + rise;
 
           // Rolling hills noise (amplitude ramps with distance from river)
-          // Kept gentle so noise-created dips don't trap rainfall into puddles
           const hillRamp = Math.min(1, outerDist / 40);
           h += fbmSimplex(fx * 4 + seed * 0.1, fy * 4 + seed * 0.2, 4, 2.0, 0.4) * 0.018 * hillRamp;
           h += fbmSimplex(fx * 10 + seed * 0.3, fy * 10 + seed * 0.4, 3, 2.0, 0.4) * 0.005;
 
-          // Ridged mountain noise: only far from river
+          // Mountain ridges: only far from river.
+          // ridgedNoise gives straight ridge lines without the spiral artifacts
+          // that warpedRidged produces.
           const mtnStart = 40;
           if (outerDist > mtnStart) {
             const mtnT = Math.min(1, (outerDist - mtnStart) / 60);
-            h += warpedRidged(fx * 5, fy * 5, 4, 2.0, 0.5, 0.5) * mtnHeight * 0.4 * mtnT;
+            h += ridgedNoise(fx * 5 + seed * 0.05, fy * 5 + seed * 0.06, 4, 2.0, 0.5) * mtnHeight * 0.4 * mtnT;
+            h += fbmSimplex(fx * 3 + seed * 0.5, fy * 3 + seed * 0.6, 3, 2.0, 0.45) * 0.03 * mtnT;
           }
 
           // Micro-texture only outside channel (prevents tiny dams in river)

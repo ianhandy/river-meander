@@ -25,6 +25,74 @@ import state from '../data/state.js';
 import { MIN_WATER } from '../data/constants.js';
 import { getHardness, getBeachiness } from '../util/helpers.js';
 
+/**
+ * stepFlowMemoryErosion — Erode terrain where water has been flowing.
+ *
+ * Cells with established directional flow (high flowSpeed, meaningful depth)
+ * get extra erosion that flattens the channel toward its downstream neighbor.
+ *
+ * CONSTRAINT (monotonic):
+ *   - Only erode if terrain[i] > lowestNeighbor (positive slope exists)
+ *   - Never erode below lowestNeighbor (preserves downhill gradient)
+ *   - Never erode when already flat or lower than all neighbors
+ *   - Eroded material becomes sediment (mass conserved)
+ *
+ * This naturally deepens channels where water flows consistently, without
+ * creating pits that trap water. The result is smoother, more defined
+ * river beds that improve over time.
+ *
+ * WRITES TO: terrainDelta[], sedimentDelta[]
+ */
+export function stepFlowMemoryErosion() {
+  const { terrain, water, flowSpeed, isOceanCell, terrainDelta, sedimentDelta,
+          GW, GH, erodibilityUI } = state;
+
+  // Rate scales with the erodibility slider so it feels consistent
+  const FLOW_EROSION_RATE = 0.0003 * erodibilityUI;
+  // How much of the headroom we're allowed to eat per step (0.3 = 30%)
+  const MAX_HEADROOM_FRAC = 0.25;
+  // Minimum thresholds: cell must have real directional flow + water
+  const MIN_SPEED = 0.08;
+  const MIN_DEPTH = 0.002;
+
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      const i = y * GW + x;
+
+      const speed = flowSpeed[i];
+      const depth = water[i];
+      if (speed < MIN_SPEED || depth < MIN_DEPTH) continue;
+      if (isOceanCell[i]) continue;
+
+      // Find the lowest neighbor terrain (the downstream direction)
+      const t_i = terrain[i];
+      let lowestH = Infinity;
+      const nb = [i - 1, i + 1, i - GW, i + GW,
+                  i - GW - 1, i - GW + 1, i + GW - 1, i + GW + 1];
+      for (const ni of nb) lowestH = Math.min(lowestH, terrain[ni]);
+
+      // Headroom = how much higher we are than the lowest neighbor.
+      // Only erode if positive (we're above it). Skip if flat or lower.
+      const headroom = t_i - lowestH;
+      if (headroom < 0.0002) continue; // flat or lower — don't touch
+
+      // Erosion proportional to flow speed × depth (deeper+faster = more cutting)
+      const rawErosion = speed * depth * FLOW_EROSION_RATE;
+
+      // Cap: never eat more than MAX_HEADROOM_FRAC of the headroom.
+      // This guarantees we stay ABOVE the lowest neighbor, keeping
+      // the slope positive (downhill).
+      const maxErosion = headroom * MAX_HEADROOM_FRAC;
+      const erosion = Math.min(rawErosion, maxErosion);
+
+      if (erosion > 1e-7) {
+        terrainDelta[i] -= erosion;
+        sedimentDelta[i] += erosion; // mass conservation
+      }
+    }
+  }
+}
+
 export function stepStreamPower() {
   const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
           origTerrain, isOceanCell, terrainDelta, sedimentDelta, flowSpeed, sources,

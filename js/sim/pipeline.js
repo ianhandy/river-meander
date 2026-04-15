@@ -24,7 +24,7 @@
 import state from '../data/state.js';
 import { MAX_DELTA_PER_STEP } from '../data/constants.js';
 import { stepWater } from './water.js';
-import { stepStreamPower } from './erosion.js';
+import { stepStreamPower, stepFlowMemoryErosion } from './erosion.js';
 import { stepDiffusion } from './diffusion.js';
 import { stepBreakthrough } from './breakthrough.js';
 import { stepSediment } from './sediment.js';
@@ -50,6 +50,7 @@ export function step() {
 
   // ── Phase 2: Erosion & diffusion (all write to delta buffers) ─────────────
   stepStreamPower();
+  stepFlowMemoryErosion();
   stepDiffusion();
 
   // ── Phase 3: Apply deltas ─────────────────────────────────────────────────
