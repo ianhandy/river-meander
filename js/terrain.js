@@ -26,129 +26,144 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
   }
   state.grainTexture = grainTexture;
 
-  // ── Drainage test: smooth slope from top (high) to bottom (ocean) ──
-  // Simple north-to-south drainage. Hill at top, ocean across the entire
-  // bottom edge. Water flows straight down with gentle lateral noise.
-  // Source placed at the top feeds a river that must carve its own path.
-  if (type === 'drainage') {
+  // ── Delta: river fans out into distributary channels at the coast ──────
+  // A single river enters from the top, flows through a narrowing valley,
+  // then reaches a broad, flat delta plain where it spreads into multiple
+  // channels before meeting the ocean across the entire bottom edge.
+  // The delta is where the interesting braiding/meandering happens — water
+  // has to find its own paths across nearly flat terrain to the sea.
+  if (type === 'delta') {
+    // ── Phase 1: River spine from top-center to delta apex ──
+    // The river flows from the top edge to about 40% down the map,
+    // where the delta fan begins. Below that is the flat delta plain.
+    const DELTA_APEX_Y = 0.38; // fraction of map height where delta starts
+    const riverCenterX = GW * (0.45 + simplex2D(seed * 0.1, 0.5) * 0.1);
+    const entryX = Math.round(riverCenterX);
+
+    // Build meandering spine from entry to delta apex
+    const spineSteps = Math.ceil(GH * DELTA_APEX_Y * 1.2);
+    const spine = [];
+    for (let s = 0; s <= spineSteps; s++) {
+      const pt = s / spineSteps;
+      const py = pt * GH * DELTA_APEX_Y;
+      const env = Math.sin(pt * Math.PI);
+      const meander = simplex2D(pt * 3 + seed * 0.2, 0.5) * GW * 0.06 * env
+                    + simplex2D(pt * 7 + seed * 0.4, 0.5) * GW * 0.02 * env;
+      const px = Math.max(3, Math.min(GW - 4, riverCenterX + meander));
+      // Height: from 0.50 at top to 0.22 at delta apex
+      const h = 0.50 - (0.50 - 0.22) * Math.pow(pt, 0.7);
+      spine.push({ x: px, y: py, h });
+    }
+
+    // ── Phase 2: Distance from spine (upstream section only) ──
+    const spineDist = new Float32Array(N).fill(1e6);
+    const spineH    = new Float32Array(N);
+    for (let y = 0; y < GH; y++) {
+      for (let x = 0; x < GW; x++) {
+        const i = y * GW + x;
+        let minD2 = Infinity, bestH = 0;
+        for (const p of spine) {
+          const dx = x - p.x, dy = y - p.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < minD2) { minD2 = d2; bestH = p.h; }
+        }
+        spineDist[i] = Math.sqrt(minD2);
+        spineH[i] = bestH;
+      }
+    }
+
+    // ── Phase 3: Build terrain ──
+    const CHANNEL_R = 4;
+    const VALLEY_R  = 18;
+    const VALLEY_H  = 0.03;
+
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
         const i = y * GW + x;
         const fx = x / GW, fy = y / GH;
+        let h;
 
-        // Simple north-to-south slope: high at top (fy=0), low at bottom (fy=1)
-        let h = 0.55 - fy * 0.45;
+        if (fy <= DELTA_APEX_Y) {
+          // ── UPSTREAM SECTION: valley with single channel ──
+          const dist = spineDist[i];
+          const riverH = spineH[i];
 
-        // Gentle lateral undulation — creates natural valley tendencies
-        h += simplex2D(fx * 3 + seed * 0.1, fy * 3 + seed * 0.2) * 0.03;
-        h += simplex2D(fx * 6 + seed * 0.3, fy * 6 + seed * 0.4) * 0.01;
+          if (dist <= CHANNEL_R) {
+            const ct = dist / CHANNEL_R;
+            h = riverH + ct * ct * 0.006;
+          } else if (dist <= VALLEY_R) {
+            const vt = (dist - CHANNEL_R) / (VALLEY_R - CHANNEL_R);
+            h = riverH + 0.006 + vt * vt * VALLEY_H;
+            h += simplex2D(fx * 12 + seed * 0.7, fy * 12 + seed * 0.8) * 0.003 * vt;
+          } else {
+            const outerDist = dist - VALLEY_R;
+            h = riverH + 0.006 + VALLEY_H + Math.min(0.18, outerDist * 0.002);
+            const hillRamp = Math.min(1, outerDist / 30);
+            h += fbmSimplex(fx * 5 + seed * 0.1, fy * 5 + seed * 0.2, 4, 2.0, 0.4) * 0.02 * hillRamp;
+            if (outerDist > 35) {
+              const mtnT = Math.min(1, (outerDist - 35) / 50);
+              h += ridgedNoise(fx * 6 + seed * 0.05, fy * 6 + seed * 0.06, 3, 2.0, 0.5) * mtnHeight * 0.3 * mtnT;
+            }
+          }
+        } else {
+          // ── DELTA PLAIN: broad, flat, slopes gently to ocean ──
+          // Height decreases from apex (~0.22) to ocean (~seaLvl - 0.05)
+          const deltaT = (fy - DELTA_APEX_Y) / (1 - DELTA_APEX_Y); // 0 at apex, 1 at bottom
+          const baseH = lerp(0.22, seaLvl - 0.05, Math.pow(deltaT, 0.6));
 
-        // Subtle micro-texture
-        h += simplex2D(fx * 20 + seed * 0.5, fy * 20 + seed * 0.6) * 0.002;
+          // Fan shape: higher on the edges, lower in the center (where water collects)
+          const cxNorm = (fx - 0.5) * 2; // -1 to 1
+          const fanWidth = 0.3 + deltaT * 0.6; // widens toward coast
+          const fanDist = Math.abs(cxNorm) / fanWidth;
+          const fanRaise = fanDist > 1 ? (fanDist - 1) * 0.15 : 0;
 
-        // Ocean across the entire bottom edge
-        if (fy > 0.85) {
-          const depth = (fy - 0.85) / 0.15;
-          h -= depth * 0.3;
+          h = baseH + fanRaise;
+
+          // Subtle distributary channel hints: sinusoidal depressions
+          // across the delta plain that water can naturally deepen
+          const ch1 = Math.abs(Math.sin((fx - 0.5 + simplex2D(fy * 3, seed * 0.3) * 0.05) * Math.PI * 3));
+          const ch2 = Math.abs(Math.sin((fx - 0.5 + simplex2D(fy * 5, seed * 0.5) * 0.04) * Math.PI * 5));
+          h -= (1 - ch1) * 0.004 * (1 - deltaT); // fade hints near coast (water finds its own way)
+          h -= (1 - ch2) * 0.002 * (1 - deltaT);
+
+          // Very gentle noise — delta plains are nearly flat
+          h += simplex2D(fx * 20 + seed * 0.6, fy * 20 + seed * 0.7) * 0.001;
+          h += fbmSimplex(fx * 8 + seed * 0.8, fy * 8 + seed * 0.9, 3, 2.0, 0.4) * 0.005;
         }
 
-        // Slight ridges on left and right edges (keeps water in the middle)
-        const edgeDist = Math.min(fx, 1 - fx);
-        if (edgeDist < 0.08) {
-          h += (0.08 - edgeDist) * 0.5;
+        // Micro-texture outside channel
+        if (fy > DELTA_APEX_Y || spineDist[i] > CHANNEL_R) {
+          h += simplex2D(fx * 25 + seed * 0.5, fy * 25 + seed * 0.6) * 0.001;
         }
 
-        t[i] = Math.max(0.01, h);
-        hn[i] = simplex2D(fx * 12 + 100, fy * 12 + 100) * 0.5 + 0.5;
+        t[i] = Math.max(0.005, h);
+        hn[i] = fbmSimplex(fx * 12 + 100, fy * 12 + 100, 4, 2.0, 0.5) * 0.5 + 0.5;
       }
     }
 
-    state.hardnessNoise = hn;
-    state.initialFlowAccum = null;
-    state.plates = [];
-    state.tectonicStress = new Float32Array(N);
-    state.faultStress = new Float32Array(N);
-    return t;
-  }
-
-  // ── Flat: even horizontal layers of all terrain types ──
-  // Each geological layer is exposed as a flat band from left to right.
-  // Top = alluvium (soft), bottom = bedrock (hard). Perfectly flat.
-  if (type === 'flat') {
-    for (let y = 0; y < GH; y++) {
-      for (let x = 0; x < GW; x++) {
-        const i = y * GW + x;
-        // Flat terrain at a fixed height — layers are revealed by effective depth
-        // which includes elevation above sea level. Set height to create
-        // even bands of each material across the map.
-        const fy = y / GH;
-        // Height varies from 0.8 (top) to 0.2 (bottom) — exposes all layers
-        t[i] = 0.8 - fy * 0.6;
-        hn[i] = 0.5;
-      }
-    }
-    state.hardnessNoise = hn;
-    state.initialFlowAccum = null;
-    state.plates = [];
-    state.tectonicStress = new Float32Array(N);
-    state.faultStress = new Float32Array(N);
-    return t;
-  }
-
-  // ── Cone: center raised, everything slopes down from the peak ──
-  // A giant cone/volcano shape. Water must flow outward in all directions.
-  if (type === 'cone') {
-    for (let y = 0; y < GH; y++) {
-      for (let x = 0; x < GW; x++) {
-        const i = y * GW + x;
-        const fx = x / GW, fy = y / GH;
-        const cx = fx - 0.5, cy = fy - 0.5;
-        const dist = Math.sqrt(cx * cx + cy * cy) * 2; // 0 at center, ~1.4 at corners
-        // Peak at center (height 0.9), slopes down to edges (height 0.1)
-        let h = Math.max(0.05, 0.9 - dist * 0.7);
-        // Subtle noise for natural variation
-        h += simplex2D(fx * 8 + seed * 0.1, fy * 8 + seed * 0.2) * 0.02;
-        h += simplex2D(fx * 20 + seed * 0.3, fy * 20 + seed * 0.4) * 0.005;
-        t[i] = Math.max(0.01, h);
-        hn[i] = simplex2D(fx * 12 + 100, fy * 12 + 100) * 0.5 + 0.5;
-      }
-    }
-    state.hardnessNoise = hn;
-    state.initialFlowAccum = null;
-    state.plates = [];
-    state.tectonicStress = new Float32Array(N);
-    state.faultStress = new Float32Array(N);
-    return t;
-  }
-
-  // ── Shuffle: randomized terrain heights ──
-  // Every cell gets a random height. Creates chaotic terrain with
-  // many small depressions and peaks. Tests how water handles noise.
-  if (type === 'shuffle') {
-    // Seeded random for reproducibility
-    let rng = seed;
-    const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xFFFFFFFF; return (rng >>> 0) / 0xFFFFFFFF; };
-    for (let y = 0; y < GH; y++) {
-      for (let x = 0; x < GW; x++) {
-        const i = y * GW + x;
-        t[i] = 0.1 + rand() * 0.7;
-        hn[i] = rand();
-      }
-    }
-    // Light smoothing so it's not pure static
-    for (let pass = 0; pass < 3; pass++) {
+    // Smooth micro-depressions outside the channel
+    for (let pass = 0; pass < 6; pass++) {
       for (let y = 1; y < GH - 1; y++) {
         for (let x = 1; x < GW - 1; x++) {
           const i = y * GW + x;
-          t[i] = t[i] * 0.5 + (t[i-1] + t[i+1] + t[i-GW] + t[i+GW]) * 0.125;
+          const fy = y / GH;
+          // Don't smooth the delta plain — it should stay flat and let water find paths
+          if (fy > DELTA_APEX_Y) continue;
+          if (spineDist[i] <= VALLEY_R) continue;
+          const avg = (t[i - 1] + t[i + 1] + t[i - GW] + t[i + GW]) * 0.25;
+          if (avg > t[i]) t[i] += (avg - t[i]) * 0.6;
         }
       }
     }
-    state.hardnessNoise = hn;
-    state.initialFlowAccum = null;
-    state.plates = [];
-    state.tectonicStress = new Float32Array(N);
-    state.faultStress = new Float32Array(N);
+
+    // ── Set entry state ──
+    state.mainRiverEntryEdge = 'top';
+    state.mainRiverEntryT    = entryX / (GW - 1);
+    state.hardnessNoise      = hn;
+    state.initialFlowAccum   = null;
+    state.plates             = [];
+    state.tectonicStress     = new Float32Array(N);
+    state.faultStress        = new Float32Array(N);
     return t;
   }
 
