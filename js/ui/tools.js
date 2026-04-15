@@ -4,6 +4,7 @@ import state from '../data/state.js';
 import { LAYERS } from '../data/constants.js';
 import { layerColor } from '../util/helpers.js';
 import { updateEquationsTooltip, hideEquationsTooltip } from './equations-panel.js';
+import { createOffscreenRiver } from '../sim/offscreen-rivers.js';
 
 export function initTools(canvas) {
 
@@ -139,14 +140,164 @@ export function initTools(canvas) {
     }
   });
 
+  // ── Off-screen river editor ────────────────────────────────────────────────
+  const riverEditor = document.getElementById('river-editor');
+  const reRateSlider = document.getElementById('re-rate');
+  const reRateVal = document.getElementById('re-rate-val');
+  const reSwaySlider = document.getElementById('re-sway');
+  const reSwayVal = document.getElementById('re-sway-val');
+  const rePeriodSlider = document.getElementById('re-period');
+  const rePeriodVal = document.getElementById('re-period-val');
+  const reDeleteBtn = document.getElementById('re-delete');
+  const reAngleBtns = riverEditor.querySelectorAll('.re-angle-btn');
+
+  let editingRiverIdx = null;
+
+  // Correct arrow glyphs for each edge (order matches data-angle: 0, 0.524, 1.047, -0.524, -1.047)
+  const EDGE_ARROWS = {
+    left:   ['→', '↘', '↓', '↗', '↑'],
+    right:  ['←', '↙', '↓', '↖', '↑'],
+    top:    ['↓', '↘', '→', '↙', '←'],
+    bottom: ['↑', '↗', '→', '↖', '←'],
+  };
+
+  function showRiverEditor(rvIdx, clientX, clientY) {
+    editingRiverIdx = rvIdx;
+    const rv = state.offscreenRivers[rvIdx];
+    reRateSlider.value = rv.rate;
+    reRateVal.textContent = rv.rate.toFixed(3);
+    reSwaySlider.value = rv.swayAmp;
+    reSwayVal.textContent = rv.swayAmp.toFixed(2);
+    rePeriodSlider.value = rv.swayPeriod;
+    rePeriodVal.textContent = rv.swayPeriod;
+    // Update arrow glyphs to match actual flow directions for this edge
+    const arrows = EDGE_ARROWS[rv.edge] || EDGE_ARROWS.left;
+    reAngleBtns.forEach((btn, idx) => {
+      btn.textContent = arrows[idx];
+      btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.angle) - rv.angle) < 0.01);
+    });
+    riverEditor.classList.remove('hidden');
+    const ex = Math.min(clientX + 14, window.innerWidth - 210);
+    const ey = Math.min(clientY - 40, window.innerHeight - 240);
+    riverEditor.style.left = ex + 'px';
+    riverEditor.style.top = Math.max(8, ey) + 'px';
+  }
+
+  function hideRiverEditor() {
+    riverEditor.classList.add('hidden');
+    editingRiverIdx = null;
+  }
+
+  reRateSlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].rate = parseFloat(reRateSlider.value);
+      reRateVal.textContent = parseFloat(reRateSlider.value).toFixed(3);
+    }
+  });
+  reSwaySlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].swayAmp = parseFloat(reSwaySlider.value);
+      reSwayVal.textContent = parseFloat(reSwaySlider.value).toFixed(2);
+    }
+  });
+  rePeriodSlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].swayPeriod = parseInt(rePeriodSlider.value);
+      rePeriodVal.textContent = rePeriodSlider.value;
+    }
+  });
+  reAngleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+        state.offscreenRivers[editingRiverIdx].angle = parseFloat(btn.dataset.angle);
+        reAngleBtns.forEach(b => b.classList.toggle('active', b === btn));
+      }
+    });
+  });
+  reDeleteBtn.addEventListener('click', () => {
+    if (editingRiverIdx !== null) {
+      state.offscreenRivers.splice(editingRiverIdx, 1);
+      hideRiverEditor();
+    }
+  });
+
+  // Edge-click detection helpers — detect clicks near the grid boundary
+  function getEdgeHit(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width;
+    const cpx = (clientX - rect.left) * scale;
+    const cpy = (clientY - rect.top) * scale;
+    const W = canvas.width, H = canvas.height;
+    const { GW, GH, camX, camY, camZoom } = state;
+    const viewSize = GW / camZoom;
+    const g2sx = gx => (gx - camX) / viewSize * W;
+    const g2sy = gy => (gy - camY) / viewSize * H;
+    const s2gx = sx => sx / W * viewSize + camX;
+    const s2gy = sy => sy / H * viewSize + camY;
+    const thresh = 18;
+    if (Math.abs(cpx - g2sx(0))  < thresh) return { edge: 'left',   edgeT: Math.max(0.02, Math.min(0.98, s2gy(cpy) / GH)) };
+    if (Math.abs(cpx - g2sx(GW)) < thresh) return { edge: 'right',  edgeT: Math.max(0.02, Math.min(0.98, s2gy(cpy) / GH)) };
+    if (Math.abs(cpy - g2sy(0))  < thresh) return { edge: 'top',    edgeT: Math.max(0.02, Math.min(0.98, s2gx(cpx) / GW)) };
+    if (Math.abs(cpy - g2sy(GH)) < thresh) return { edge: 'bottom', edgeT: Math.max(0.02, Math.min(0.98, s2gx(cpx) / GW)) };
+    return null;
+  }
+
+  function findNearbyRiver(clientX, clientY) {
+    if (!state.offscreenRivers) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width;
+    const cpx = (clientX - rect.left) * scale;
+    const cpy = (clientY - rect.top) * scale;
+    const W = canvas.width, H = canvas.height;
+    const { GW, GH, camX, camY, camZoom } = state;
+    const viewSize = GW / camZoom;
+    const g2sx = gx => (gx - camX) / viewSize * W;
+    const g2sy = gy => (gy - camY) / viewSize * H;
+    let best = null, bestDist = Infinity;
+    for (let i = 0; i < state.offscreenRivers.length; i++) {
+      const rv = state.offscreenRivers[i];
+      // Use animated curT so click target matches the visual marker position
+      const curT = Math.max(0.01, Math.min(0.99, rv.edgeT + rv.swayAmp * Math.sin(rv.swayPhase)));
+      let sx, sy;
+      if (rv.edge === 'left')   { sx = g2sx(0);  sy = g2sy(curT * GH); }
+      if (rv.edge === 'right')  { sx = g2sx(GW); sy = g2sy(curT * GH); }
+      if (rv.edge === 'top')    { sx = g2sx(curT * GW); sy = g2sy(0); }
+      if (rv.edge === 'bottom') { sx = g2sx(curT * GW); sy = g2sy(GH); }
+      const dist = Math.sqrt((cpx - sx) ** 2 + (cpy - sy) ** 2);
+      if (dist < 32 && dist < bestDist) { best = i; bestDist = dist; }
+    }
+    return best;
+  }
+
   document.addEventListener('mousedown', (e) => {
     if (state.editingSourceIdx !== null && !srcEditor.contains(e.target)) {
       hideSourceEditor();
+    }
+    if (editingRiverIdx !== null && !riverEditor.contains(e.target)) {
+      hideRiverEditor();
     }
   });
 
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !state.terrain) return;
+
+    // Edge click — off-screen river creation / editing (any tool mode)
+    const edgeHit = getEdgeHit(e.clientX, e.clientY);
+    if (edgeHit) {
+      const rvIdx = findNearbyRiver(e.clientX, e.clientY);
+      if (rvIdx !== null) {
+        showRiverEditor(rvIdx, e.clientX, e.clientY);
+      } else {
+        if (!state.offscreenRivers) state.offscreenRivers = [];
+        const rv = createOffscreenRiver(edgeHit.edge, edgeHit.edgeT);
+        state.offscreenRivers.push(rv);
+        showRiverEditor(state.offscreenRivers.length - 1, e.clientX, e.clientY);
+      }
+      e.stopPropagation(); // prevent document listener from immediately closing the popup
+      e.preventDefault();
+      return;
+    }
+
     const { gx, gy, clientX, clientY } = canvasToGrid(e);
     if (gx < 0 || gx >= state.GW || gy < 0 || gy >= state.GH) return;
 
@@ -154,6 +305,7 @@ export function initTools(canvas) {
       const srcIdx = findNearbySource(gx, gy);
       if (srcIdx !== null) {
         showSourceEditor(srcIdx, clientX, clientY);
+        e.stopPropagation(); // prevent document listener from immediately closing the popup
       } else {
         state.sources.push({ gx, gy, rate: 0.06 });
       }

@@ -136,7 +136,7 @@ export const PARAMS = {
     group: 'erosion',
   },
   erodeSpeedMin: {
-    val: 0.001, min: 0, max: 0.05, step: 0.001,
+    val: 0.3, min: 0, max: 1.0, step: 0.01,
     unit: 'm/s',
     desc: 'Minimum flow speed for erosion to occur. Prevents stagnant-pool erosion.',
     group: 'erosion',
@@ -210,13 +210,13 @@ export const PARAMS = {
     group: 'display',
   },
   waterAlphaMin: {
-    val: 0.8, min: 0, max: 1.0, step: 0.01,
+    val: 0.15, min: 0, max: 1.0, step: 0.01,
     unit: '',
     desc: 'Minimum water opacity. 0 = thin water invisible, 1 = all water fully opaque.',
     group: 'display',
   },
   waterAlphaDepth: {
-    val: 0.23, min: 0, max: 1.0, step: 0.01,
+    val: 0.85, min: 0, max: 1.0, step: 0.01,
     unit: '',
     desc: 'How much depth adds to opacity. Higher = deep water much more opaque than shallow.',
     group: 'display',

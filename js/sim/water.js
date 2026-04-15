@@ -121,7 +121,13 @@ export function stepWater() {
                     + fluxUL[ni] + fluxUR[ni] + fluxDL[ni] + fluxDR[ni];
         const streamPull = nFlux * ATTRACT;
 
-        const newFlux = oldFlux + (dt * g * nlDiff * distWeight + bedGrav * Math.max(0, bedSlope) * distWeight) * slopeBoost + streamPull * distWeight;
+        // Two forces on water:
+        // 1. Surface pressure (nlDiff): water flows from high surface to low
+        // 2. Bed gravity (bedSlope): terrain slope pulls water downhill ALWAYS,
+        //    even when water surface is flat. This is what makes water "want"
+        //    to keep moving through a flat-bottomed channel.
+        const bedForce = bedGrav * bedSlope * distWeight; // not clamped — pulls downhill, resists uphill
+        const newFlux = oldFlux + (dt * g * nlDiff * distWeight + bedForce) * slopeBoost + streamPull * distWeight;
 
         if (newFlux <= 0 && oldFlux > 0.001) {
           return oldFlux * 0.85;
@@ -224,9 +230,10 @@ export function stepWater() {
           if (allFlux[f] > dominant) dominant = allFlux[f];
         }
         const directionality = totalFlux > 0.0001 ? dominant / totalFlux : 0; // 0.125-1.0
-        // Only count as speed if flow is directional (> 0.25 = mostly one way)
-        const wd = Math.max(water[i], 0.01);
-        const spd = directionality > 0.2 ? dominant * (directionality - 0.125) / wd : 0;
+        // Speed = pure directionality. Not scaled by flux magnitude.
+        // A river (80% of flux one way) is fast regardless of volume.
+        // A source/pool (flux spread evenly) is slow regardless of volume.
+        const spd = directionality > 0.2 ? directionality - 0.125 : 0;
         flowSpeed[i] = flowSpeed[i] * 0.8 + spd * 0.2;
 
         // ── Stagnancy ─────────────────────────────────────────────────────
@@ -234,29 +241,10 @@ export function stepWater() {
         const stagnancy = Math.exp(-flowSpeed[i] * 5);
 
         // ── Is this water still filling or already overflowing? ──────────
-        // Filling = water surface below all neighbor terrain = trapped.
-        // Overflowing = water surface above at least one neighbor terrain.
-        // Filling water should NOT evaporate — it needs to rise.
-        const waterSurf = terrain[i] + water[i];
-        let isOverflowing = false;
-        if (water[i] > 0) {
-          for (const ni of [i-1, i+1, i-GW, i+GW]) {
-            if (ni < 0 || ni >= GW * GH) continue;
-            if (isOceanCell[ni]) { isOverflowing = true; break; }
-            if (waterSurf > terrain[ni]) { isOverflowing = true; break; }
-          }
-        }
-
         // ── Evaporation ───────────────────────────────────────────────────
         if (water[i] > 0) {
           const evapMult = movingEvapMult + stagnancy * stagnantEvapMult;
-          let evapFrac = evapRate * evapMult;
-
-          if (!isOverflowing) {
-            // Still filling — don't evaporate. Water must rise.
-            evapFrac = 0;
-          }
-
+          const evapFrac = evapRate * evapMult;
           water[i] *= (1 - Math.min(0.5, evapFrac));
         }
 
@@ -266,11 +254,13 @@ export function stepWater() {
         if (water[i] > 0 && saturation[i] < 1.0) {
           const absorbMult = movingAbsorbMult + stagnancy * stagnantAbsorbMult;
           const beach = getBeachiness(i);
-          const beachBoost = 1 + beach * 15;
+          const beachBoost = 1 + beach * 2; // sand absorbs slightly faster, not 16x
           let absorbFrac = absorbRate * absorbMult * (1.0 - saturation[i]) * beachBoost;
 
-          // Filling water saturates the ground — stops absorbing
-          if (!isOverflowing || (stagnancy > 0.9 && water[i] > 0.01)) {
+          // Deep stagnant pools saturate the ground — stops absorbing.
+          // (Previously also blocked on !isOverflowing, but that kills absorption on
+          //  flat terrain where almost no cell is "overflowing" its neighbours.)
+          if (stagnancy > 0.9 && water[i] > 0.01) {
             saturation[i] = 1.0;
             absorbFrac = 0;
           }

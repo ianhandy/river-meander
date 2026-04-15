@@ -28,6 +28,7 @@ import { stepStreamPower } from './erosion.js';
 import { stepDiffusion } from './diffusion.js';
 import { stepBreakthrough } from './breakthrough.js';
 import { stepSediment } from './sediment.js';
+import { stepOffscreenRivers } from './offscreen-rivers.js';
 
 /**
  * Run one simulation step.
@@ -42,8 +43,9 @@ export function step() {
   sedimentDelta.fill(0);
 
   // ── Phase 1: Water physics ────────────────────────────────────────────────
+  // Off-screen rivers inject water at the edge before the pipe model runs.
+  stepOffscreenRivers();
   // Updates water[], flux[], flowSpeed[] in-place.
-  // These are safe to modify directly because no other system writes to them.
   const maxDepth = stepWater();
 
   // ── Phase 2: Erosion & diffusion (all write to delta buffers) ─────────────

@@ -50,6 +50,9 @@ const state = {
   // Snapshots for initial state:
   origTerrain: null,   // Float32Array — terrain at generation time (for depth calc)
   initialFlowAccum: null, // Float32Array — particle erosion flow accumulation
+  grainTexture: null,  // Float32Array — high-frequency per-cell hash for material texture
+  mainRiverEntryEdge: null, // 'top'|'left'|'right' — edge where main drainage enters
+  mainRiverEntryT: 0.5,     // 0–1 position along that edge
   //
   // Render scratch:
   waterSmooth: null,   // Float32Array — smoothed water for rendering
@@ -82,7 +85,7 @@ const state = {
   realtimeMode: false,    // 1:1 mode: one sim step per render frame
 
   // ── View state ──────────────────────────────────────────────────────────────
-  viewMode: 'terrain',    // 'terrain' | 'height' | 'exposed' | 'material' | '3d'
+  viewMode: 'terrain',    // 'terrain' (geological layers) | 'height' | '3d'
   showLayers: false,
   showContours: true,
   showPressure: false,
@@ -101,11 +104,11 @@ const state = {
   genRoughness: 0.50,
   genTerrainType: 'river_valley',
   genSeaLevel: 0.20,
-  genMtnHeight: 0.50,
-  genRainfall: 30,
-  genMapKm: 25,
-  genCellsPerKm: 20,
-  genMapSize: 500,
+  genMtnHeight: 0.30,
+  genRainfall: 10,
+  genMapKm: 2,
+  genCellsPerKm: 200,
+  genMapSize: 400,
   genForceOcean: true,
   genNumPlates: 0,
   genErosionPasses: 1,

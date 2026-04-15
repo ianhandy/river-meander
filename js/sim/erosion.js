@@ -27,7 +27,7 @@ import { getHardness, getBeachiness } from '../util/helpers.js';
 
 export function stepStreamPower() {
   const { terrain, water, sediment, fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
-          origTerrain, isOceanCell, terrainDelta, sedimentDelta, flowSpeed,
+          origTerrain, isOceanCell, terrainDelta, sedimentDelta, flowSpeed, sources,
           GW, GH, erodibilityUI, seaLevel,
           K, Kc, Kd, gravity, asymmetry,
           erodeWaterMin, erodeSpeedMin } = state;
@@ -40,16 +40,20 @@ export function stepStreamPower() {
       if (water[i] < erodeWaterMin) continue;
       if (isOceanCell[i]) continue;
 
-      // ── Only moving water erodes ────────────────────────────────────────
-      // Use flowSpeed which measures directionality — pools read as zero.
-      // Still water builds pressure but does NOT erode.
+      // Skip source cells — injection points shouldn't erode
+      let isSource = false;
+      for (const src of sources) {
+        if (src.gx === x && src.gy === y) { isSource = true; break; }
+      }
+      if (isSource) continue;
+
+      // ── Flow speed (directionality-based, no depth divisor) ────────────
       const speed = flowSpeed[i];
       if (speed < erodeSpeedMin) continue;
 
       // ── Flow direction from 8-directional flux ────────────────────────
       const wd = Math.max(water[i], 0.01);
-      const D = 0.707; // diagonal component
-      // Net x velocity: rightward fluxes minus leftward, including diagonals
+      const D = 0.707;
       const vx = (fluxR[i] - fluxL[i]
                 + (fluxUR[i] + fluxDR[i]) * D - (fluxUL[i] + fluxDL[i]) * D) / wd;
       // Net y velocity: downward fluxes minus upward, including diagonals
@@ -117,15 +121,24 @@ export function stepStreamPower() {
           const wallHeight = terrain[bi] - terrain[i];
           if (wallHeight < 0.002) continue; // not significantly higher, not a wall
 
-          // Stream can only erode the submerged portion of the wall.
-          // submergedFrac: 1.0 = wall fully under water, 0.0 = wall fully above.
-          // A thin stream barely reaches the base of a tall wall.
-          const wallTop = terrain[bi];
-          const wallBase = terrain[i]; // channel floor
-          const submerged = Math.min(waterSurface, wallTop) - wallBase;
-          const wallTotal = wallTop - wallBase;
-          const submergedFrac = wallTotal > 0.001 ? Math.max(0, submerged / wallTotal) : 0;
-          if (submergedFrac < 0.01) continue; // water doesn't reach this wall
+          // Water erodes the wall at its own surface level — a notch at
+          // the waterline. It can only lower the wall down to the water
+          // surface, not below. A thin stream carves a thin notch at the
+          // top of the contact zone. A deep stream carves a deeper notch.
+          //
+          // contactDepth: how much of the wall the water touches (from top down)
+          // If wall is fully submerged: contactDepth = water depth
+          // If wall sticks above water: contactDepth = waterSurface - wallBase
+          const wallBase = Math.max(terrain[i], terrain[bi] - (terrain[bi] - terrain[i]));
+          // Erosion only at the water surface — a thin band at the waterline.
+          // The water carves a notch right at its level. Deeper water doesn't
+          // erode the entire submerged face — just the surface contact.
+          // Band thickness = min(water depth, 0.01) — thin streams = thin band.
+          const band = Math.min(water[i], 0.01);
+          // Wall must be within the band (near water surface) to be eroded
+          const wallDistFromSurface = Math.abs(terrain[bi] - waterSurface);
+          if (wallDistFromSurface > band) continue; // wall too far from waterline
+          const contactFrac = 1.0 - wallDistFromSurface / (band + 0.001);
 
           // ── Perpendicularity ────────────────────────────────────────────
           // How head-on is the flow hitting this wall?
@@ -158,9 +171,9 @@ export function stepStreamPower() {
           else if (dx === 1 && dy === 1)   momentumToward = fluxDR[i];
 
           const wallH = getHardness(bi);
-          // Force = (pressure + momentum) * perpendicularity * submerged fraction
-          // Thin concentrated streams: high momentum, low submerged = focused cut at base
-          let force = K * erodMult * (pressure + momentumToward * 50) * interaction * submergedFrac * distW / wallH;
+          // Force = (pressure + momentum) * perpendicularity * contact fraction
+          // Thin stream = thin contact zone = focused notch at waterline
+          let force = K * erodMult * (pressure + momentumToward * 50) * interaction * contactFrac * distW / wallH;
 
           // Concentrated flow bonus: high directionality = more punch
           force *= (0.5 + directionality * 2); // concentrated = up to 2.5x
@@ -180,8 +193,10 @@ export function stepStreamPower() {
           //
           // Split: 70% collapses as terrain into channel (fills the hole),
           //        30% becomes suspended sediment (carried downstream).
-          // Can't erode bank below the water surface — only the submerged part
-          const maxErode = Math.max(0, terrain[bi] - Math.max(terrain[i], waterSurface - water[i]));
+          // Wall can only be lowered to the water surface — not below.
+          // The water carves a notch AT its level, then the overhanging
+          // material above collapses (handled by diffusion angle-of-repose).
+          const maxErode = Math.max(0, terrain[bi] - waterSurface);
           const eroded = Math.min(force * deficit, 0.003, maxErode);
           if (eroded > 0.00001) {
             terrainDelta[bi] -= eroded;           // bank lowers

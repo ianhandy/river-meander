@@ -12,6 +12,7 @@ export function showGenModal() {
   document.getElementById('btn-play').classList.remove('active');
   document.getElementById('gen-seed').value = Math.floor(Math.random() * 99999);
   document.getElementById('gen-mapsize').value = state.genMapKm;
+  document.getElementById('gen-density').value = state.genCellsPerKm;
   document.getElementById('gen-octaves').value = state.genOctaves;
   document.getElementById('gen-valley').value = Math.round(state.genValley * 100);
   document.getElementById('gen-roughness').value = Math.round(state.genRoughness * 100);
@@ -32,9 +33,11 @@ export function hideGenModal() {
 }
 
 function updateGenLabels() {
-  const km = parseInt(document.getElementById('gen-mapsize').value) || 25;
-  const cells = km * state.genCellsPerKm;
+  const km = parseInt(document.getElementById('gen-mapsize').value) || 5;
+  const density = parseInt(document.getElementById('gen-density').value) || 100;
+  const cells = km * density;
   document.getElementById('gen-mapsize-val').textContent = `${km} km (${cells}\u00D7${cells})`;
+  document.getElementById('gen-density-val').textContent = `${density} /km`;
   document.getElementById('gen-octaves-val').textContent = document.getElementById('gen-octaves').value;
   document.getElementById('gen-valley-val').textContent = document.getElementById('gen-valley').value;
   document.getElementById('gen-roughness-val').textContent = document.getElementById('gen-roughness').value;
@@ -48,7 +51,8 @@ function updateGenLabels() {
 
 function generateFromModal() {
   state.currentSeed    = parseInt(document.getElementById('gen-seed').value) || 0;
-  state.genMapKm       = parseInt(document.getElementById('gen-mapsize').value) || 25;
+  state.genMapKm       = parseInt(document.getElementById('gen-mapsize').value) || 5;
+  state.genCellsPerKm  = parseInt(document.getElementById('gen-density').value) || 100;
   state.genMapSize     = state.genMapKm * state.genCellsPerKm;
   state.genOctaves     = parseInt(document.getElementById('gen-octaves').value);
   state.genValley      = parseInt(document.getElementById('gen-valley').value) / 100;
@@ -164,8 +168,8 @@ export function initModal() {
   const btnNew2 = document.getElementById('btn-new2');
   if (btnNew2) btnNew2.addEventListener('click', showGenModal);
   document.getElementById('btn-river-preset').addEventListener('click', applyRiverPreset);
-  document.getElementById('btn-test-preset').addEventListener('click', applyTestPreset);
-  ['gen-mapsize','gen-octaves','gen-valley','gen-roughness','gen-mtn-height',
+  // Test preset removed
+  ['gen-mapsize','gen-density','gen-octaves','gen-valley','gen-roughness','gen-mtn-height',
    'gen-sea-level','gen-plates','gen-erosion-passes','gen-rainfall'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateGenLabels);
   });
