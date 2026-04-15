@@ -319,10 +319,11 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       px = Math.max(2, Math.min(GW - 3, px));
       py = Math.max(2, Math.min(GH - 3, py));
 
-      // Monotonically decreasing height: smoothstep for natural concave profile
-      const entryH = 0.40, oceanH = 0.05;
-      const st = pt * pt * (3 - 2 * pt); // smoothstep
-      const h = entryH - (entryH - oceanH) * st;
+      // Monotonically decreasing height: concave power curve
+      // Steep near the entry (mountain drainage), gentle near the ocean (delta).
+      // This gives ~0.002/cell gradient at entry vs ~0.0005/cell near ocean.
+      const entryH = 0.50, oceanH = 0.03;
+      const h = entryH - (entryH - oceanH) * Math.pow(pt, 0.65);
 
       riverPath.push({ x: px, y: py, h });
     }
