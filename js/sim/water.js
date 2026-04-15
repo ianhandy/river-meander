@@ -307,10 +307,12 @@ export function stepWater() {
         }
 
         // ── Edge drainage ─────────────────────────────────────────────────
+        // Skip drain on cells receiving off-screen river water — the river
+        // IS the water source, draining it fights the injection.
         if (x === 0 || x === GW - 1 || y === 0 || y === GH - 1) {
           if (isOceanCell[i]) {
             water[i] = Math.max(0, seaLevel - terrain[i]);
-          } else {
+          } else if (!(state.riverEdgeCell && state.riverEdgeCell[i])) {
             water[i] *= 0.7; // 30% drain per step at non-ocean edges
           }
         }
