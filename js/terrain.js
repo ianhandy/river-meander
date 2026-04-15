@@ -149,6 +149,46 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       }
     }
 
+    // Monotonic enforcement along delta spine + BFS inner channel flatten
+    {
+      let ceiling = riverPath[0].h + 0.001;
+      for (const p of riverPath) {
+        const ix = Math.round(p.x), iy = Math.round(p.y);
+        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
+        const idx = iy * GW + ix;
+        if (t[idx] >= ceiling) t[idx] = Math.max(0.005, ceiling - 0.004);
+        ceiling = t[idx];
+      }
+      const visited = new Uint8Array(N);
+      const nearH   = new Float32Array(N);
+      const queue    = [];
+      for (const p of riverPath) {
+        const ix = Math.round(p.x), iy = Math.round(p.y);
+        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
+        const idx = iy * GW + ix;
+        if (!visited[idx]) { visited[idx] = 1; nearH[idx] = t[idx]; queue.push(idx); }
+      }
+      let head = 0;
+      while (head < queue.length) {
+        const idx = queue[head++];
+        const d = visited[idx];
+        const chR = lerp(4, 8, Math.pow(((idx / GW) | 0) / GH, 1.5));
+        if (d > chR + 1) continue;
+        const cx = idx % GW, cy = (idx / GW) | 0;
+        for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nx = cx + ddx, ny = cy + ddy;
+          if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+          const ni = ny * GW + nx;
+          if (visited[ni]) continue;
+          visited[ni] = d + 1;
+          nearH[ni] = nearH[idx];
+          queue.push(ni);
+          const target = nearH[ni] + d * 0.001;
+          if (t[ni] > target) t[ni] = target;
+        }
+      }
+    }
+
     // ── Set entry state ──
     state.mainRiverEntryEdge = 'top';
     state.mainRiverEntryT    = entryX / (GW - 1);
@@ -421,6 +461,58 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
           if (pathDist[i] <= VALLEY_R) continue; // protect channel + valley walls
           const avg = (t[i - 1] + t[i + 1] + t[i - GW] + t[i + GW]) * 0.25;
           if (avg > t[i]) t[i] += (avg - t[i]) * 0.6;
+        }
+      }
+    }
+
+    // ── Phase 4b: Enforce monotonic decrease along river spine ──────────
+    // The distance-field approach creates height inversions at meander
+    // bends: a cell in the crook of a bend maps to an upstream (higher)
+    // path point instead of the downstream one, creating a dam.
+    // Fix: walk the path and force each cell strictly below the previous.
+    // Then BFS outward to flatten the inner channel floor.
+    {
+      let ceiling = riverPath[0].h + 0.001;
+      for (const p of riverPath) {
+        const ix = Math.round(p.x), iy = Math.round(p.y);
+        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
+        const idx = iy * GW + ix;
+        if (t[idx] >= ceiling) t[idx] = Math.max(0.005, ceiling - 0.004);
+        ceiling = t[idx];
+      }
+
+      // BFS from spine: force inner channel (within CHANNEL_R) to be
+      // at most spineH + small bank rise. Fills pits that trap water.
+      const visited = new Uint8Array(N);
+      const nearH   = new Float32Array(N);
+      const queue    = [];
+      for (const p of riverPath) {
+        const ix = Math.round(p.x), iy = Math.round(p.y);
+        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
+        const idx = iy * GW + ix;
+        if (!visited[idx]) {
+          visited[idx] = 1;
+          nearH[idx] = t[idx];
+          queue.push(idx);
+        }
+      }
+      let head = 0;
+      while (head < queue.length) {
+        const idx = queue[head++];
+        const d = visited[idx];
+        if (d > CHANNEL_R + 1) continue;
+        const cx = idx % GW, cy = (idx / GW) | 0;
+        for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nx = cx + ddx, ny = cy + ddy;
+          if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+          const ni = ny * GW + nx;
+          if (visited[ni]) continue;
+          visited[ni] = d + 1;
+          nearH[ni] = nearH[idx];
+          queue.push(ni);
+          // Force inner channel floor: no higher than spine + bank rise
+          const target = nearH[ni] + (d * 0.001);
+          if (t[ni] > target) t[ni] = target;
         }
       }
     }
