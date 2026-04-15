@@ -26,113 +26,107 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
   }
   state.grainTexture = grainTexture;
 
-  // ── Delta: river fans out into distributary channels at the coast ──────
-  // A single river enters from the top, flows through a narrowing valley,
-  // then reaches a broad, flat delta plain where it spreads into multiple
-  // channels before meeting the ocean across the entire bottom edge.
-  // The delta is where the interesting braiding/meandering happens — water
-  // has to find its own paths across nearly flat terrain to the sea.
+  // ── Delta: river widens gradually into a coastal plain ─────────────────
+  // One continuous river path from top to bottom. The valley width and
+  // wall height change smoothly with latitude: narrow/deep upstream,
+  // wide/flat near the coast. No separate zones — the delta emerges
+  // naturally as the valley opens out and terrain relief drops to zero.
+  // Ocean across the entire bottom edge.
   if (type === 'delta') {
-    // ── Phase 1: River spine from top-center to delta apex ──
-    // The river flows from the top edge to about 40% down the map,
-    // where the delta fan begins. Below that is the flat delta plain.
-    const DELTA_APEX_Y = 0.38; // fraction of map height where delta starts
-    const riverCenterX = GW * (0.45 + simplex2D(seed * 0.1, 0.5) * 0.1);
+    // ── Phase 1: Meandering river path, top to bottom ──
+    const riverCenterX = GW * (0.42 + simplex2D(seed * 0.1, 0.5) * 0.16);
     const entryX = Math.round(riverCenterX);
+    const pathSteps = Math.ceil(GH * 1.15);
+    const riverPath = [];
 
-    // Build meandering spine from entry to delta apex
-    const spineSteps = Math.ceil(GH * DELTA_APEX_Y * 1.2);
-    const spine = [];
-    for (let s = 0; s <= spineSteps; s++) {
-      const pt = s / spineSteps;
-      const py = pt * GH * DELTA_APEX_Y;
+    for (let s = 0; s <= pathSteps; s++) {
+      const pt = s / pathSteps;
+      const py = pt * (GH - 2) + 1;
+      // Meander amplitude grows in the middle, shrinks near entry/exit
       const env = Math.sin(pt * Math.PI);
-      const meander = simplex2D(pt * 3 + seed * 0.2, 0.5) * GW * 0.06 * env
-                    + simplex2D(pt * 7 + seed * 0.4, 0.5) * GW * 0.02 * env;
+      const amp = GW * 0.08;
+      const meander = (
+        simplex2D(pt * 2.5 + seed * 0.13, 0.5) * amp * 0.7 +
+        simplex2D(pt * 6   + seed * 0.37, 0.5) * amp * 0.3
+      ) * env * env;
       const px = Math.max(3, Math.min(GW - 4, riverCenterX + meander));
-      // Height: from 0.50 at top to 0.22 at delta apex
-      const h = 0.50 - (0.50 - 0.22) * Math.pow(pt, 0.7);
-      spine.push({ x: px, y: py, h });
+      // Height: concave drop — steep upstream, gentle near coast
+      const entryH = 0.48, coastH = seaLvl - 0.03;
+      const h = entryH - (entryH - coastH) * Math.pow(pt, 0.55);
+      riverPath.push({ x: px, y: py, h });
     }
 
-    // ── Phase 2: Distance from spine (upstream section only) ──
-    const spineDist = new Float32Array(N).fill(1e6);
-    const spineH    = new Float32Array(N);
+    // ── Phase 2: Distance field ──
+    const pathDist = new Float32Array(N);
+    const pathH    = new Float32Array(N);
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
-        const i = y * GW + x;
         let minD2 = Infinity, bestH = 0;
-        for (const p of spine) {
+        for (const p of riverPath) {
           const dx = x - p.x, dy = y - p.y;
           const d2 = dx * dx + dy * dy;
           if (d2 < minD2) { minD2 = d2; bestH = p.h; }
         }
-        spineDist[i] = Math.sqrt(minD2);
-        spineH[i] = bestH;
+        const i = y * GW + x;
+        pathDist[i] = Math.sqrt(minD2);
+        pathH[i] = bestH;
       }
     }
 
-    // ── Phase 3: Build terrain ──
-    const CHANNEL_R = 4;
-    const VALLEY_R  = 18;
-    const VALLEY_H  = 0.03;
+    // ── Phase 3: Build terrain — one continuous formula ──
+    // All parameters vary smoothly with fy (latitude):
+    //   channelR:  4 → 8         (channel widens toward coast)
+    //   valleyR:   18 → 80       (valley opens out into plain)
+    //   valleyH:   0.035 → 0.003 (walls shrink — delta is flat)
+    //   outerMax:  0.20 → 0.02   (surrounding terrain drops)
+    //   mtnScale:  1.0 → 0.0     (mountains only upstream)
 
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
         const i = y * GW + x;
         const fx = x / GW, fy = y / GH;
+        const dist = pathDist[i];
+        const riverH = pathH[i];
+
+        // Smooth latitude-dependent parameters
+        const coastT = Math.pow(fy, 1.5); // 0 at top, ~1 at bottom (nonlinear)
+        const channelR = lerp(4, 8, coastT);
+        const valleyR  = lerp(18, 80, coastT);
+        const valleyH  = lerp(0.035, 0.003, coastT);
+        const bankH    = lerp(0.008, 0.001, coastT);
+        const outerMax = lerp(0.20, 0.02, coastT);
+        const mtnScale = Math.max(0, 1 - coastT * 2.5); // fades to 0 at fy≈0.4
+
         let h;
 
-        if (fy <= DELTA_APEX_Y) {
-          // ── UPSTREAM SECTION: valley with single channel ──
-          const dist = spineDist[i];
-          const riverH = spineH[i];
-
-          if (dist <= CHANNEL_R) {
-            const ct = dist / CHANNEL_R;
-            h = riverH + ct * ct * 0.006;
-          } else if (dist <= VALLEY_R) {
-            const vt = (dist - CHANNEL_R) / (VALLEY_R - CHANNEL_R);
-            h = riverH + 0.006 + vt * vt * VALLEY_H;
-            h += simplex2D(fx * 12 + seed * 0.7, fy * 12 + seed * 0.8) * 0.003 * vt;
-          } else {
-            const outerDist = dist - VALLEY_R;
-            h = riverH + 0.006 + VALLEY_H + Math.min(0.18, outerDist * 0.002);
-            const hillRamp = Math.min(1, outerDist / 30);
-            h += fbmSimplex(fx * 5 + seed * 0.1, fy * 5 + seed * 0.2, 4, 2.0, 0.4) * 0.02 * hillRamp;
-            if (outerDist > 35) {
-              const mtnT = Math.min(1, (outerDist - 35) / 50);
-              h += ridgedNoise(fx * 6 + seed * 0.05, fy * 6 + seed * 0.06, 3, 2.0, 0.5) * mtnHeight * 0.3 * mtnT;
-            }
-          }
+        if (dist <= channelR) {
+          const ct = dist / channelR;
+          h = riverH + ct * ct * bankH;
+        } else if (dist <= valleyR) {
+          const vt = (dist - channelR) / (valleyR - channelR);
+          h = riverH + bankH + vt * vt * valleyH;
+          // Valley wall noise — less on the flat delta
+          h += simplex2D(fx * 12 + seed * 0.7, fy * 12 + seed * 0.8) * 0.004 * vt * (1 - coastT);
+          h += simplex2D(fx * 6 + seed * 0.9, fy * 6 + seed * 1.1) * 0.002 * vt * (1 - coastT);
         } else {
-          // ── DELTA PLAIN: broad, flat, slopes gently to ocean ──
-          // Height decreases from apex (~0.22) to ocean (~seaLvl - 0.05)
-          const deltaT = (fy - DELTA_APEX_Y) / (1 - DELTA_APEX_Y); // 0 at apex, 1 at bottom
-          const baseH = lerp(0.22, seaLvl - 0.05, Math.pow(deltaT, 0.6));
+          const outerDist = dist - valleyR;
+          const rise = Math.min(outerMax, outerDist * lerp(0.002, 0.0003, coastT));
+          h = riverH + bankH + valleyH + rise;
 
-          // Fan shape: higher on the edges, lower in the center (where water collects)
-          const cxNorm = (fx - 0.5) * 2; // -1 to 1
-          const fanWidth = 0.3 + deltaT * 0.6; // widens toward coast
-          const fanDist = Math.abs(cxNorm) / fanWidth;
-          const fanRaise = fanDist > 1 ? (fanDist - 1) * 0.15 : 0;
+          // Hills — amplitude fades toward coast
+          const hillRamp = Math.min(1, outerDist / 40) * (1 - coastT * 0.8);
+          h += fbmSimplex(fx * 5 + seed * 0.1, fy * 5 + seed * 0.2, 4, 2.0, 0.4) * 0.02 * hillRamp;
+          h += fbmSimplex(fx * 10 + seed * 0.3, fy * 10 + seed * 0.4, 3, 2.0, 0.4) * 0.005 * (1 - coastT * 0.5);
 
-          h = baseH + fanRaise;
-
-          // Subtle distributary channel hints: sinusoidal depressions
-          // across the delta plain that water can naturally deepen
-          const ch1 = Math.abs(Math.sin((fx - 0.5 + simplex2D(fy * 3, seed * 0.3) * 0.05) * Math.PI * 3));
-          const ch2 = Math.abs(Math.sin((fx - 0.5 + simplex2D(fy * 5, seed * 0.5) * 0.04) * Math.PI * 5));
-          h -= (1 - ch1) * 0.004 * (1 - deltaT); // fade hints near coast (water finds its own way)
-          h -= (1 - ch2) * 0.002 * (1 - deltaT);
-
-          // Very gentle noise — delta plains are nearly flat
-          h += simplex2D(fx * 20 + seed * 0.6, fy * 20 + seed * 0.7) * 0.001;
-          h += fbmSimplex(fx * 8 + seed * 0.8, fy * 8 + seed * 0.9, 3, 2.0, 0.4) * 0.005;
+          // Mountains — only upstream half
+          if (mtnScale > 0 && outerDist > 35) {
+            const mtnT = Math.min(1, (outerDist - 35) / 50);
+            h += ridgedNoise(fx * 6 + seed * 0.05, fy * 6 + seed * 0.06, 3, 2.0, 0.5) * mtnHeight * 0.3 * mtnT * mtnScale;
+          }
         }
 
-        // Micro-texture outside channel
-        if (fy > DELTA_APEX_Y || spineDist[i] > CHANNEL_R) {
+        // Micro-texture (skip channel floor)
+        if (dist > channelR) {
           h += simplex2D(fx * 25 + seed * 0.5, fy * 25 + seed * 0.6) * 0.001;
         }
 
@@ -141,15 +135,14 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       }
     }
 
-    // Smooth micro-depressions outside the channel
+    // Smooth micro-depressions in uplands only (protect valley + delta plain)
     for (let pass = 0; pass < 6; pass++) {
       for (let y = 1; y < GH - 1; y++) {
         for (let x = 1; x < GW - 1; x++) {
           const i = y * GW + x;
           const fy = y / GH;
-          // Don't smooth the delta plain — it should stay flat and let water find paths
-          if (fy > DELTA_APEX_Y) continue;
-          if (spineDist[i] <= VALLEY_R) continue;
+          const valleyR = lerp(18, 80, Math.pow(fy, 1.5));
+          if (pathDist[i] <= valleyR) continue;
           const avg = (t[i - 1] + t[i + 1] + t[i - GW] + t[i + GW]) * 0.25;
           if (avg > t[i]) t[i] += (avg - t[i]) * 0.6;
         }
