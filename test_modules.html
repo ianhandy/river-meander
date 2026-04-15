@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<body>
+<pre id="log"></pre>
+<script type="module">
+const log = (msg) => { document.getElementById('log').textContent += msg + '\n'; console.log(msg); };
+try {
+  log('Loading constants...');
+  const c = await import('http://localhost:8080/js/data/constants.js');
+  log('OK: constants loaded, PARAMS keys: ' + Object.keys(c.PARAMS).length);
+  
+  log('Loading state...');
+  const s = await import('http://localhost:8080/js/data/state.js');
+  log('OK: state loaded');
+
+  log('Loading equations...');
+  const e = await import('http://localhost:8080/js/data/equations.js');
+  log('OK: equations loaded, keys: ' + Object.keys(e.EQUATIONS).length);
+
+  log('Loading noise...');
+  await import('http://localhost:8080/js/util/noise.js');
+  log('OK: noise loaded');
+
+  log('Loading math...');
+  await import('http://localhost:8080/js/util/math.js');
+  log('OK: math loaded');
+
+  log('Loading helpers...');
+  await import('http://localhost:8080/js/util/helpers.js');
+  log('OK: helpers loaded');
+
+  log('Loading ocean...');
+  await import('http://localhost:8080/js/util/ocean.js');
+  log('OK: ocean loaded');
+
+  log('Loading water...');
+  await import('http://localhost:8080/js/sim/water.js');
+  log('OK: water loaded');
+
+  log('Loading erosion...');
+  await import('http://localhost:8080/js/sim/erosion.js');
+  log('OK: erosion loaded');
+
+  log('Loading diffusion...');
+  await import('http://localhost:8080/js/sim/diffusion.js');
+  log('OK: diffusion loaded');
+
+  log('Loading breakthrough...');
+  await import('http://localhost:8080/js/sim/breakthrough.js');
+  log('OK: breakthrough loaded');
+
+  log('Loading sediment...');
+  await import('http://localhost:8080/js/sim/sediment.js');
+  log('OK: sediment loaded');
+
+  log('Loading tectonics...');
+  await import('http://localhost:8080/js/sim/tectonics.js');
+  log('OK: tectonics loaded');
+
+  log('Loading oxbow...');
+  await import('http://localhost:8080/js/sim/oxbow.js');
+  log('OK: oxbow loaded');
+
+  log('Loading pipeline...');
+  await import('http://localhost:8080/js/sim/pipeline.js');
+  log('OK: pipeline loaded');
+
+  log('ALL MODULES LOADED SUCCESSFULLY');
+} catch(e) {
+  log('ERROR: ' + e.message);
+  log('Stack: ' + e.stack);
+}
+</script>
+</body>
+</html>

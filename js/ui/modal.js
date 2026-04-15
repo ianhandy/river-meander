@@ -1,9 +1,8 @@
 // Generation modal — terrain type selection, presets, generation params
 
-import state from './state.js';
-import { RAINFALL_MAX, MOUNTAIN_THRESHOLD } from './constants.js';
+import state from '../data/state.js';
+import { RAINFALL_MAX, MOUNTAIN_THRESHOLD } from '../data/constants.js';
 
-// initSim is injected by main.js to avoid circular imports
 let _initSim = null;
 export function setInitSim(fn) { _initSim = fn; }
 
@@ -11,9 +10,9 @@ export function showGenModal() {
   state.running = false;
   document.getElementById('btn-play').textContent = '\u25B6 Play';
   document.getElementById('btn-play').classList.remove('active');
-
   document.getElementById('gen-seed').value = Math.floor(Math.random() * 99999);
   document.getElementById('gen-mapsize').value = state.genMapKm;
+  document.getElementById('gen-density').value = state.genCellsPerKm;
   document.getElementById('gen-octaves').value = state.genOctaves;
   document.getElementById('gen-valley').value = Math.round(state.genValley * 100);
   document.getElementById('gen-roughness').value = Math.round(state.genRoughness * 100);
@@ -22,11 +21,9 @@ export function showGenModal() {
   document.getElementById('gen-rainfall').value = state.genRainfall;
   document.getElementById('gen-plates').value = state.genNumPlates;
   document.getElementById('gen-erosion-passes').value = state.genErosionPasses;
-
   document.querySelectorAll('.gen-type-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.type === state.genTerrainType);
   });
-
   updateGenLabels();
   document.getElementById('gen-overlay').classList.remove('hidden');
 }
@@ -36,9 +33,11 @@ export function hideGenModal() {
 }
 
 function updateGenLabels() {
-  const km = parseInt(document.getElementById('gen-mapsize').value) || 25;
-  const cells = km * state.genCellsPerKm;
-  document.getElementById('gen-mapsize-val').textContent = `${km} km (${cells}×${cells})`;
+  const km = parseInt(document.getElementById('gen-mapsize').value) || 5;
+  const density = parseInt(document.getElementById('gen-density').value) || 100;
+  const cells = km * density;
+  document.getElementById('gen-mapsize-val').textContent = `${km} km (${cells}\u00D7${cells})`;
+  document.getElementById('gen-density-val').textContent = `${density} /km`;
   document.getElementById('gen-octaves-val').textContent = document.getElementById('gen-octaves').value;
   document.getElementById('gen-valley-val').textContent = document.getElementById('gen-valley').value;
   document.getElementById('gen-roughness-val').textContent = document.getElementById('gen-roughness').value;
@@ -52,7 +51,8 @@ function updateGenLabels() {
 
 function generateFromModal() {
   state.currentSeed    = parseInt(document.getElementById('gen-seed').value) || 0;
-  state.genMapKm       = parseInt(document.getElementById('gen-mapsize').value) || 25;
+  state.genMapKm       = parseInt(document.getElementById('gen-mapsize').value) || 5;
+  state.genCellsPerKm  = parseInt(document.getElementById('gen-density').value) || 100;
   state.genMapSize     = state.genMapKm * state.genCellsPerKm;
   state.genOctaves     = parseInt(document.getElementById('gen-octaves').value);
   state.genValley      = parseInt(document.getElementById('gen-valley').value) / 100;
@@ -65,7 +65,6 @@ function generateFromModal() {
   state.genErosionPasses = parseFloat(document.getElementById('gen-erosion-passes').value);
   state.genForceOcean  = document.getElementById('gen-force-ocean').checked;
   const startWater = document.getElementById('gen-water').checked;
-
   hideGenModal();
   if (_initSim) _initSim(startWater);
   state.running = true;
@@ -87,34 +86,25 @@ export function applyRiverPreset() {
   state.genErosionPasses = 2;
   state.genForceOcean  = true;
   state.genRainfall    = 30;
-
-  state.SIM_TECTONIC_SPEED = 0;
-  const tEl = document.getElementById('dev-tspeed');
-  if (tEl) { tEl.value = 0; document.getElementById('dev-tspeed-val').textContent = '0.00'; }
-
+  state.tectonicSpeed = 0;
+  const tEl = document.getElementById('dev-tectonicSpeed');
+  if (tEl) { tEl.value = 0; const v = document.getElementById('dev-tectonicSpeed-val'); if (v) v.textContent = '0.00'; }
   hideGenModal();
   if (_initSim) _initSim(true);
-
   const { GW, GH, terrain, isOceanCell, saturation, water } = state;
-
-  // Strong source at high end of valley
   state.sources = [];
   let bestY = Math.floor(GH / 2), minH = Infinity;
   for (let y = Math.floor(GH * 0.3); y < Math.floor(GH * 0.7); y++) {
     const h = terrain[y * GW + (GW - 5)];
     if (h < minH) { minH = h; bestY = y; }
   }
-  state.sources.push({ gx: GW - 5, gy: bestY, rate: state.SIM_SPRING_RATE * 10 });
-
-  // Pre-saturate valley soil
+  state.sources.push({ gx: GW - 5, gy: bestY, rate: state.springRate * 10 });
   for (let y = Math.floor(GH * 0.15); y < Math.floor(GH * 0.85); y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
       if (!isOceanCell[i]) saturation[i] = 1.0;
     }
   }
-
-  // Fill channel
   for (let x = 0; x < GW; x++) {
     let lowH = Infinity, lowY = Math.floor(GH / 2);
     for (let y = Math.floor(GH * 0.2); y < Math.floor(GH * 0.8); y++) {
@@ -131,7 +121,6 @@ export function applyRiverPreset() {
       }
     }
   }
-
   state.running = true;
   document.getElementById('btn-play').textContent = '\u23F8 Pause';
   document.getElementById('btn-play').classList.add('active');
@@ -140,7 +129,7 @@ export function applyRiverPreset() {
 export function applyTestPreset() {
   state.currentSeed    = 42;
   state.genMapKm       = 1;
-  state.genMapSize     = 25;  // 1km at 20/km ≈ 25
+  state.genMapSize     = 25;
   state.genOctaves     = 2;
   state.genValley      = 0;
   state.genRoughness   = 0.1;
@@ -151,24 +140,15 @@ export function applyTestPreset() {
   state.genErosionPasses = 0;
   state.genForceOcean  = false;
   state.genRainfall    = 0;
-
-  // Disable tectonics for test
-  state.SIM_TECTONIC_SPEED = 0;
-  const tEl = document.getElementById('dev-tspeed');
-  if (tEl) { tEl.value = 0; document.getElementById('dev-tspeed-val').textContent = '0.00'; }
-
+  state.tectonicSpeed = 0;
+  const tEl = document.getElementById('dev-tectonicSpeed');
+  if (tEl) { tEl.value = 0; const v = document.getElementById('dev-tectonicSpeed-val'); if (v) v.textContent = '0.00'; }
   hideGenModal();
   if (_initSim) _initSim(true);
-
   const { GW, GH, terrain, water, saturation, isOceanCell } = state;
-
-  // Place water source at top center (feeding the lake)
   state.sources = [];
   const srcX = Math.floor(GW / 2);
-  const srcY = 1;
-  state.sources.push({ gx: srcX, gy: srcY, rate: 0.01 });
-
-  // Pre-fill lake depression with a bit of water
+  state.sources.push({ gx: srcX, gy: 1, rate: 0.01 });
   for (let y = 0; y < Math.floor(GH * 0.28); y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
@@ -178,48 +158,32 @@ export function applyTestPreset() {
       }
     }
   }
-
   state.running = true;
   document.getElementById('btn-play').textContent = '\u23F8 Pause';
   document.getElementById('btn-play').classList.add('active');
 }
 
-// ── Wire up modal events ──
-
 export function initModal() {
-  // New button
   document.getElementById('btn-new').addEventListener('click', showGenModal);
   const btnNew2 = document.getElementById('btn-new2');
   if (btnNew2) btnNew2.addEventListener('click', showGenModal);
-
-  // Preset buttons
   document.getElementById('btn-river-preset').addEventListener('click', applyRiverPreset);
-  document.getElementById('btn-test-preset').addEventListener('click', applyTestPreset);
-
-  // Modal sliders
-  ['gen-mapsize','gen-octaves','gen-valley','gen-roughness','gen-mtn-height',
+  // Test preset removed
+  ['gen-mapsize','gen-density','gen-octaves','gen-valley','gen-roughness','gen-mtn-height',
    'gen-sea-level','gen-plates','gen-erosion-passes','gen-rainfall'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateGenLabels);
   });
-
-  // Terrain type buttons
   document.querySelectorAll('.gen-type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.gen-type-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
-
-  // Generate button
   document.getElementById('gen-go').addEventListener('click', generateFromModal);
-
-  // Random seed button
   document.getElementById('gen-random-seed').addEventListener('click', () => {
     document.getElementById('gen-seed').value = Math.floor(Math.random() * 99999);
     updateGenLabels();
   });
-
-  // Close modal
   document.getElementById('gen-close').addEventListener('click', hideGenModal);
   document.getElementById('gen-overlay').addEventListener('click', (e) => {
     if (e.target === document.getElementById('gen-overlay')) hideGenModal();
