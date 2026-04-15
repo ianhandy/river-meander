@@ -48,11 +48,11 @@ export function stepFlowMemoryErosion() {
           GW, GH, erodibilityUI } = state;
 
   // Rate scales with the erodibility slider so it feels consistent
-  const FLOW_EROSION_RATE = 0.0012 * erodibilityUI;
+  const FLOW_EROSION_RATE = 0.0004 * erodibilityUI;
   // How much of the headroom we're allowed to eat per step
-  const MAX_HEADROOM_FRAC = 0.4;
+  const MAX_HEADROOM_FRAC = 0.2;
   // Minimum thresholds: low so even slow/shallow flow carves over time
-  const MIN_SPEED = 0.03;
+  const MIN_SPEED = 0.05;
   const MIN_DEPTH = 0.001;
 
   for (let y = 1; y < GH - 1; y++) {

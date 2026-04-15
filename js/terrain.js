@@ -51,7 +51,8 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       ) * env * env;
       const px = Math.max(3, Math.min(GW - 4, riverCenterX + meander));
       // Height: concave drop — steep upstream, gentle near coast
-      const entryH = 0.48, coastH = seaLvl - 0.03;
+      // Channel must stay above sea level (same fix as river_valley)
+      const entryH = 0.48, coastH = seaLvl + 0.01;
       const h = entryH - (entryH - coastH) * Math.pow(pt, 0.55);
       riverPath.push({ x: px, y: py, h });
     }
@@ -370,7 +371,10 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       // Monotonically decreasing height: concave power curve
       // Steep near the entry (mountain drainage), gentle near the ocean (delta).
       // This gives ~0.002/cell gradient at entry vs ~0.0005/cell near ocean.
-      const entryH = 0.50, oceanH = 0.03;
+      // Channel floor must stay ABOVE sea level — rivers flow INTO the
+      // ocean, not under it.  If the floor drops below seaLvl, the ocean
+      // BFS flood-fills up the channel and turns it into ocean cells.
+      const entryH = 0.50, oceanH = seaLvl + 0.01;
       const h = entryH - (entryH - oceanH) * Math.pow(pt, 0.65);
 
       riverPath.push({ x: px, y: py, h });

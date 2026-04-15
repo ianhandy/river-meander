@@ -178,8 +178,8 @@ export function stepWater() {
       //
       // The coefficient is small enough that it doesn't dominate gravity
       // but large enough to sustain flow across flat channel floors.
-      const MOMENTUM_COEFF = 0.5;
-      if (flowSpeed[i] > 0.08 && w > 0.001) {
+      const MOMENTUM_COEFF = 0.3;
+      if (flowSpeed[i] > 0.1 && w > 0.002) {
         const momentum = flowSpeed[i] * w * MOMENTUM_COEFF;
         // Find dominant outflow direction and boost it
         let maxF = fluxL[i], maxD = 0;
