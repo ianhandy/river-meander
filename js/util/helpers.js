@@ -15,10 +15,15 @@ function effectiveDepth(i) {
 }
 
 // How "beachy" is this cell? 0 = not beach, 1 = full beach.
-// Beach = near sea level, close to ocean, not submerged.
+// Beach = near sea level, close to ocean, not submerged, and NOT a flowing river.
+// Flowing water prevents sand from accumulating — rivers cut through to the ocean.
 export function getBeachiness(i) {
-  const { terrain, isOceanCell, seaLevel, GW, GH } = state;
+  const { terrain, isOceanCell, seaLevel, flowSpeed, GW, GH } = state;
   if (!isOceanCell || isOceanCell[i]) return 0;
+
+  // Rivers near the ocean are channels, not beaches
+  if (flowSpeed && flowSpeed[i] > 0.1) return 0;
+
   const elevAboveSea = terrain[i] - seaLevel;
   if (elevAboveSea < 0 || elevAboveSea > 0.06) return 0;
 

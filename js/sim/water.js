@@ -169,6 +169,42 @@ export function stepWater() {
         fluxDR[i] = calcFlux(fluxDR[i], ni, isOceanCell[ni], DIAG_W);
       } else { fluxDR[i] = 0; }
 
+      // ── River momentum carry ─────────────────────────────────────────
+      // When water has established directional flow (high flowSpeed),
+      // boost flux in the dominant direction.  This is a simplified
+      // hydraulic head: upstream water mass keeps pushing downstream,
+      // carrying flow through flat sections and micro-dips that would
+      // otherwise trap water.
+      //
+      // The coefficient is small enough that it doesn't dominate gravity
+      // but large enough to sustain flow across flat channel floors.
+      const MOMENTUM_COEFF = 0.15;
+      if (flowSpeed[i] > 0.15 && w > 0.003) {
+        const momentum = flowSpeed[i] * w * MOMENTUM_COEFF;
+        // Find dominant outflow direction and boost it
+        let maxF = fluxL[i], maxD = 0;
+        if (fluxR[i]  > maxF) { maxF = fluxR[i];  maxD = 1; }
+        if (fluxU[i]  > maxF) { maxF = fluxU[i];  maxD = 2; }
+        if (fluxD[i]  > maxF) { maxF = fluxD[i];  maxD = 3; }
+        if (fluxUL[i] > maxF) { maxF = fluxUL[i]; maxD = 4; }
+        if (fluxUR[i] > maxF) { maxF = fluxUR[i]; maxD = 5; }
+        if (fluxDL[i] > maxF) { maxF = fluxDL[i]; maxD = 6; }
+        if (fluxDR[i] > maxF) { maxF = fluxDR[i]; maxD = 7; }
+
+        if (maxF > 0) {
+          switch (maxD) {
+            case 0: fluxL[i]  += momentum; break;
+            case 1: fluxR[i]  += momentum; break;
+            case 2: fluxU[i]  += momentum; break;
+            case 3: fluxD[i]  += momentum; break;
+            case 4: fluxUL[i] += momentum; break;
+            case 5: fluxUR[i] += momentum; break;
+            case 6: fluxDL[i] += momentum; break;
+            case 7: fluxDR[i] += momentum; break;
+          }
+        }
+      }
+
       // Flux normalization: all 8 directions
       const totalOut = (fluxL[i] + fluxR[i] + fluxU[i] + fluxD[i]
                       + fluxUL[i] + fluxUR[i] + fluxDL[i] + fluxDR[i]) * dt;
@@ -249,13 +285,10 @@ export function stepWater() {
         }
 
         // ── Absorption ────────────────────────────────────────────────────
-        // Beach sand absorbs 16x faster than regular ground.
         // Contained water (no relief) has saturated ground — skip absorption.
         if (water[i] > 0 && saturation[i] < 1.0) {
           const absorbMult = movingAbsorbMult + stagnancy * stagnantAbsorbMult;
-          const beach = getBeachiness(i);
-          const beachBoost = 1 + beach * 2; // sand absorbs slightly faster, not 16x
-          let absorbFrac = absorbRate * absorbMult * (1.0 - saturation[i]) * beachBoost;
+          let absorbFrac = absorbRate * absorbMult * (1.0 - saturation[i]);
 
           // Deep stagnant pools saturate the ground — stops absorbing.
           // (Previously also blocked on !isOverflowing, but that kills absorption on
