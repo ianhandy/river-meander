@@ -300,6 +300,31 @@
   }
   #source-editor button:hover { background: #3d1e1e; }
 
+  /* ── Off-screen river editor ── */
+  #river-editor {
+    position: fixed; background: #161b22; border: 1px solid #21262d;
+    border-radius: 7px; padding: 10px 14px; z-index: 50;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    min-width: 180px; font-size: 10px; color: #c9d1d9;
+  }
+  #river-editor.hidden { display: none; }
+  #river-editor label { font-size: 9px; color: #6e7681; display: block; margin-bottom: 3px; }
+  #river-editor input[type=range] { width: 100%; margin: 3px 0 6px; }
+  #river-editor .re-val { color: #58a6ff; font-size: 10px; font-weight: 600; }
+  #river-editor .re-title { font-size: 10px; font-weight: 600; color: #6ecbf5; margin-bottom: 8px; }
+  #river-editor .re-angles { display: flex; gap: 3px; margin: 4px 0 8px; }
+  #river-editor .re-angle-btn {
+    flex: 1; padding: 4px 2px; text-align: center; font-size: 13px;
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px; cursor: pointer; color: #c9d1d9;
+  }
+  #river-editor .re-angle-btn.active { background: #0d4a7a; border-color: #58a6ff; color: #58a6ff; }
+  #river-editor .re-delete {
+    width: 100%; padding: 4px; margin-top: 3px;
+    background: #2d1515; border: 1px solid #5c2020; color: #e0a0a0;
+    border-radius: 4px; font-size: 9px; font-family: inherit; cursor: pointer;
+  }
+  #river-editor .re-delete:hover { background: #3d1e1e; }
+
   /* ── Tool panel (top-left) ── */
   #tool-panel {
     position: fixed; top: 10px; left: 10px;
@@ -394,31 +419,20 @@
 <!-- ── Legend (below world info) ── -->
 <div id="legend">
   <div id="legend-terrain">
-    <div class="lrow"><div class="lswatch" style="background:#2d2820"></div> Seabed</div>
-    <div class="lrow"><div class="lswatch" style="background:#a09670"></div> Coast</div>
-    <div class="lrow"><div class="lswatch" style="background:#7d9c52"></div> Plains</div>
-    <div class="lrow"><div class="lswatch" style="background:#946e3e"></div> Foothills</div>
-    <div class="lrow"><div class="lswatch" style="background:#8a8480"></div> Rock</div>
-    <div class="lrow"><div class="lswatch" style="background:#d7d7dc"></div> Snow</div>
+    <div class="lrow"><div class="lswatch" style="background:#c8b89a"></div> Alluvium</div>
+    <div class="lrow"><div class="lswatch" style="background:#b08e6e"></div> Clay</div>
+    <div class="lrow"><div class="lswatch" style="background:#8a7050"></div> Sandstone</div>
+    <div class="lrow"><div class="lswatch" style="background:#606070"></div> Limestone</div>
+    <div class="lrow"><div class="lswatch" style="background:#485060"></div> Bedrock</div>
   </div>
   <div id="legend-height" style="display:none">
     <div class="lrow"><div class="lswatch" style="background:#000"></div> Low</div>
     <div class="lrow"><div class="lswatch" style="background:#fff"></div> High</div>
   </div>
-  <div id="legend-exposed" style="display:none">
-    <div class="lrow"><div class="lswatch" style="background:#b4a582"></div> Dry</div>
-    <div class="lrow"><div class="lswatch" style="background:#3278c8"></div> Shallow</div>
-    <div class="lrow"><div class="lswatch" style="background:#0f2882"></div> Deep</div>
-  </div>
   <div id="legend-layers" style="display:none">
     <div class="lrow"><div class="lswatch" style="background:#c8b89a"></div> Alluvium</div>
     <div class="lrow"><div class="lswatch" style="background:#8a6040"></div> Sandstone</div>
     <div class="lrow"><div class="lswatch" style="background:#485060"></div> Bedrock</div>
-  </div>
-  <div id="legend-material" style="display:none">
-    <div class="lrow"><div class="lswatch" style="background:#d4c4a0"></div> Alluvium</div>
-    <div class="lrow"><div class="lswatch" style="background:#807060"></div> Sandstone</div>
-    <div class="lrow"><div class="lswatch" style="background:#404858"></div> Bedrock</div>
   </div>
   <div id="legend-pressure" style="display:none">
     <div class="lrow"><div class="lswatch" style="background:#0f3cb4"></div> Low</div>
@@ -436,8 +450,6 @@
   <div class="view-pills">
     <button id="btn-view-terrain" class="active">Terrain</button>
     <button id="btn-view-height">Height</button>
-    <button id="btn-view-exposed">Water</button>
-    <button id="btn-view-material">Material</button>
     <button id="btn-view-3d">3D</button>
   </div>
   <div class="toggle-row">
@@ -516,6 +528,25 @@
   <button id="se-delete">Delete Source</button>
 </div>
 
+<div id="river-editor" class="hidden">
+  <div class="re-title">Offscreen River</div>
+  <label>Direction (click to cycle)</label>
+  <div class="re-angles">
+    <button class="re-angle-btn active" data-angle="0">→</button>
+    <button class="re-angle-btn" data-angle="0.524">↘</button>
+    <button class="re-angle-btn" data-angle="1.047">↓</button>
+    <button class="re-angle-btn" data-angle="-0.524">↗</button>
+    <button class="re-angle-btn" data-angle="-1.047">↑</button>
+  </div>
+  <label>Flow Rate: <span class="re-val" id="re-rate-val">0.008</span></label>
+  <input type="range" id="re-rate" min="0.001" max="0.03" step="0.001" value="0.008">
+  <label>Sway: <span class="re-val" id="re-sway-val">0.08</span></label>
+  <input type="range" id="re-sway" min="0" max="0.4" step="0.01" value="0.08">
+  <label>Sway Speed: <span class="re-val" id="re-period-val">400</span> steps/cycle</label>
+  <input type="range" id="re-period" min="50" max="2000" step="50" value="400">
+  <button class="re-delete" id="re-delete">Delete River</button>
+</div>
+
 <!-- ── Dev panel ── -->
 <button id="dev-toggle">&#9881;</button>
 <div id="dev-panel" class="hidden">
@@ -564,19 +595,21 @@
     <button id="gen-close">&times;</button>
     <h3>New Terrain</h3>
     <div class="gen-presets">
-      <button id="btn-test-preset">Test 25x25</button>
       <button id="btn-river-preset">River Preset</button>
     </div>
     <div class="gen-row">
       <label>Type</label>
       <div class="gen-types">
-        <button class="gen-type-btn" data-type="test">Test</button>
+        <button class="gen-type-btn" data-type="flat">Flat</button>
+        <button class="gen-type-btn" data-type="cone">Cone</button>
         <button class="gen-type-btn" data-type="drainage">Drain</button>
         <button class="gen-type-btn active" data-type="river_valley">Valley</button>
         <button class="gen-type-btn" data-type="floodplain">Flood</button>
         <button class="gen-type-btn" data-type="island">Island</button>
         <button class="gen-type-btn" data-type="continent">Cont.</button>
         <button class="gen-type-btn" data-type="mountain_range">Mtn</button>
+        <button class="gen-type-btn" data-type="shuffle">Shuffle</button>
+        <button class="gen-type-btn" data-type="central_river">Cen. River</button>
       </div>
     </div>
     <div class="gen-row">
@@ -586,8 +619,13 @@
     </div>
     <div class="gen-row">
       <label>Map Size (km)</label>
-      <input type="range" id="gen-mapsize" min="5" max="100" step="5" value="25">
-      <span class="gen-val" id="gen-mapsize-val">25 km (500×500)</span>
+      <input type="range" id="gen-mapsize" min="1" max="100" step="1" value="5">
+      <span class="gen-val" id="gen-mapsize-val">5 km (500×500)</span>
+    </div>
+    <div class="gen-row">
+      <label>Cell Density</label>
+      <input type="range" id="gen-density" min="10" max="200" step="10" value="100">
+      <span class="gen-val" id="gen-density-val">100 /km</span>
     </div>
     <div class="gen-sep">Terrain</div>
     <div class="gen-row"><label>Smoothness</label><input type="range" id="gen-octaves" min="2" max="8" value="6"><span class="gen-val" id="gen-octaves-val">6</span></div>

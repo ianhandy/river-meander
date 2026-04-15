@@ -29,6 +29,7 @@ import { initUI } from './ui/controls.js';
 import { initModal, setInitSim } from './ui/modal.js';
 import { initTools } from './ui/tools.js';
 import { initEquationsPanel } from './ui/equations-panel.js';
+import { createOffscreenRiver } from './sim/offscreen-rivers.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -78,6 +79,17 @@ function initSim(startWithWater) {
   for (let i = 0; i < N; i++) { if (s.isOceanCell[i]) { s.hasOcean = true; break; } }
 
   s.sources = [];
+  s.offscreenRivers = [];
+
+  // Auto-place off-screen river at the terrain's natural drainage inlet
+  if (s.mainRiverEntryEdge) {
+    const rv = createOffscreenRiver(s.mainRiverEntryEdge, s.mainRiverEntryT);
+    rv.rate = 0.05;       // enough volume to sustain visible flow to ocean
+    rv.width = 0.03;      // narrow injection — matches carved channel width
+    rv.swayAmp = 0.015;   // very gentle sway — stays inside the carved valley
+    rv.swayPeriod = 800;
+    s.offscreenRivers.push(rv);
+  }
   if (startWithWater !== false) {
     // Pre-fill ocean
     for (let i = 0; i < N; i++) {
@@ -116,8 +128,8 @@ function initSim(startWithWater) {
       }
     }
 
-    // Fallback source
-    if (s.sources.length === 0) {
+    // Fallback source (skip when an offscreen river is the primary water source)
+    if (s.sources.length === 0 && s.offscreenRivers.length === 0) {
       let minH = Infinity, srcY = Math.floor(GH / 2);
       for (let y = GH * 0.2 | 0; y < GH * 0.8 | 0; y++) {
         const h = s.terrain[y * GW];

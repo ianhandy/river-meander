@@ -2,8 +2,8 @@
 
 import state from '../data/state.js';
 import { UI_H } from '../data/constants.js';
-import { elevColor, mat4Perspective, mat4LookAt, mat4Multiply } from '../util/math.js';
-import { getBeachiness } from '../util/helpers.js';
+import { mat4Perspective, mat4LookAt, mat4Multiply } from '../util/math.js';
+import { layerColorTextured, getBeachiness } from '../util/helpers.js';
 
 const TERRAIN_VERT = `
 attribute vec3 aPos;
@@ -195,9 +195,9 @@ export function render3D(c3d) {
       tPos[i * 3 + 1] = h;
       tPos[i * 3 + 2] = y / GH - 0.5;
 
-      // Base terrain color
-      const c = elevColor(h);
-      let cr = c[0] / 255, cg = c[1] / 255, cb = c[2] / 255;
+      // Base terrain color from geological layers (same system as 2D material view)
+      const lc = layerColorTextured(i);
+      let cr = lc.r / 255, cg = lc.g / 255, cb = lc.b / 255;
 
       // Beach tint
       const beach = getBeachiness(i);

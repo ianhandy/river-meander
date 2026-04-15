@@ -20,8 +20,6 @@ export function setView(mode, c3d) {
   state.viewMode = mode;
   document.getElementById('btn-view-terrain').classList.toggle('active', mode === 'terrain');
   document.getElementById('btn-view-height').classList.toggle('active', mode === 'height');
-  document.getElementById('btn-view-exposed').classList.toggle('active', mode === 'exposed');
-  document.getElementById('btn-view-material').classList.toggle('active', mode === 'material');
   document.getElementById('btn-view-3d').classList.toggle('active', mode === '3d');
   document.getElementById('c').classList.toggle('hidden-2d', mode === '3d');
   document.getElementById('c3d').classList.toggle('active-3d', mode === '3d');
@@ -34,8 +32,6 @@ export function updateLegend() {
   const vm = state.viewMode;
   document.getElementById('legend-terrain').style.display = (vm === 'terrain' && !state.showLayers && !state.showPressure && !state.showVelocity) ? '' : 'none';
   document.getElementById('legend-height').style.display = vm === 'height' ? '' : 'none';
-  document.getElementById('legend-exposed').style.display = vm === 'exposed' ? '' : 'none';
-  document.getElementById('legend-material').style.display = vm === 'material' ? '' : 'none';
   document.getElementById('legend-layers').style.display = (state.showLayers && !state.showPressure && !state.showVelocity) ? '' : 'none';
   document.getElementById('legend-pressure').style.display = state.showPressure ? '' : 'none';
   document.getElementById('legend-velocity').style.display = state.showVelocity ? '' : 'none';
@@ -109,13 +105,14 @@ function saveDevSettings() {
   localStorage.setItem('riverMeanderDev', JSON.stringify(settings));
 }
 
-const SETTINGS_VERSION = 23; // bump to invalidate stale localStorage
+const SETTINGS_VERSION = 33; // bump to invalidate stale localStorage
 
 function loadDevSettings() {
   try {
     const ver = parseInt(localStorage.getItem('riverMeanderDevVer') || '0');
     if (ver < SETTINGS_VERSION) {
       localStorage.removeItem('riverMeanderDev');
+      localStorage.removeItem('riverMeanderBar');
       localStorage.setItem('riverMeanderDevVer', SETTINGS_VERSION);
       return;
     }
@@ -172,7 +169,7 @@ function loadBarSettings(c3d) {
       const el = document.getElementById(id);
       if (el && s[id] !== undefined) el.value = s[id];
     });
-    if (s.viewMode) setView(s.viewMode, c3d);
+    setView(s.viewMode || state.viewMode, c3d);
     if (s.showContours === false) toggleContours();
     if (s.showLayers === true) toggleLayers();
     if (s.showPressure === true) togglePressure();
@@ -364,8 +361,6 @@ export function initUI(c3d) {
   if (btnPlay2) btnPlay2.addEventListener('click', togglePlay);
   document.getElementById('btn-view-terrain').addEventListener('click', () => setView('terrain', c3d));
   document.getElementById('btn-view-height').addEventListener('click', () => setView('height', c3d));
-  document.getElementById('btn-view-exposed').addEventListener('click', () => setView('exposed', c3d));
-  document.getElementById('btn-view-material').addEventListener('click', () => setView('material', c3d));
   document.getElementById('btn-view-3d').addEventListener('click', () => setView('3d', c3d));
   document.getElementById('btn-contours').addEventListener('click', toggleContours);
   document.getElementById('btn-layers').addEventListener('click', toggleLayers);

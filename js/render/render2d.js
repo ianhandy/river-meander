@@ -2,8 +2,8 @@
 
 import state from '../data/state.js';
 import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from '../data/constants.js';
-import { lerp, sampleGrid, sampleGridFast, elevColor } from '../util/math.js';
-import { layerColor, getBeachiness } from '../util/helpers.js';
+import { lerp, sampleGrid, sampleGridFast } from '../util/math.js';
+import { layerColorTextured, getBeachiness } from '../util/helpers.js';
 
 export function render(canvas, ctx, maxDepth) {
   const { terrain, water, isOceanCell, saturation, hardnessNoise,
@@ -78,44 +78,32 @@ export function render(canvas, ctx, maxDepth) {
       const isOcean = isOceanCell ? isOceanCell[ci] : false;
       const w = Math.max(0, sampleGridFast(ws, gxf, gyf));
 
+      // Precompute adjacent terrain samples — used by hillshading and contours
+      const hR = sampleGridFast(terrain, gxf + pxToGrid, gyf);
+      const hD = sampleGridFast(terrain, gxf, gyf + pyToGrid);
+
       if (viewMode === 'height') {
         const v = Math.max(0, Math.min(255, h * 280)) | 0;
         tr = v; tg = v; tb = v;
-      } else if (viewMode === 'material') {
-        const lc = layerColor(ci);
-        const satShade = saturation ? (0.85 + (1 - saturation[ci]) * 0.15) : 1.0;
-        tr = lc.r * satShade | 0;
-        tg = lc.g * satShade | 0;
-        tb = lc.b * satShade | 0;
-      } else if (viewMode === 'exposed') {
-        const isBelowSea = h < seaLevel;
-        if (w > MIN_WATER * 2 || isBelowSea) {
-          const depth = isBelowSea ? Math.min(1, (seaLevel - h) / 0.15) : Math.min(1, w / REF_DEPTH);
-          tr = lerp(50, 15, depth) | 0;
-          tg = lerp(120, 40, depth) | 0;
-          tb = lerp(200, 130, depth) | 0;
-        } else {
-          const shade = 0.7 + h * 0.5;
-          tr = 180 * shade | 0;
-          tg = 165 * shade | 0;
-          tb = 130 * shade | 0;
-        }
       } else {
-        if (showLayers) {
-          const lc = layerColor(ci);
-          const e = terrain[ci];
-          const noiseShade = hardnessNoise ? (0.9 + hardnessNoise[ci] * 0.2) : 1.0;
-          const shade = (0.75 + e * 0.45) * noiseShade;
-          tr = lc.r * shade | 0;
-          tg = lc.g * shade | 0;
-          tb = lc.b * shade | 0;
-        } else {
-          [tr, tg, tb] = elevColor(h);
-        }
+        // Default: geological layer view with hillshading + texture
+        // NW illumination: terrain sloping up to the SE (dzdx>0, dzdy>0) is shadowed;
+        // terrain sloping up to the NW is bright.
+        const dzdx = (hR - h) / pxToGrid;
+        const dzdy = (hD - h) / pyToGrid;
+        const hillGrad = -dzdx - dzdy; // positive = NW-facing = bright
+        const hillShade = Math.max(0.2, Math.min(1.0, 0.62 + hillGrad * 5));
+        const satShade = saturation ? (0.85 + (1 - saturation[ci]) * 0.15) : 1.0;
+        const shade = hillShade * satShade;
+
+        const lc = layerColorTextured(ci);
+        tr = Math.min(255, lc.r * shade) | 0;
+        tg = Math.min(255, lc.g * shade) | 0;
+        tb = Math.min(255, lc.b * shade) | 0;
       }
 
       // Beach sand tint
-      if (viewMode === 'terrain' || viewMode === 'exposed') {
+      {
         const beach = getBeachiness(ci);
         if (beach > 0.1) {
           const b = beach * 0.7;
@@ -125,10 +113,8 @@ export function render(canvas, ctx, maxDepth) {
         }
       }
 
-      // Contour lines
+      // Contour lines (reuse hR/hD from above)
       if (showContours) {
-        const hR = sampleGridFast(terrain, gxf + pxToGrid, gyf);
-        const hD = sampleGridFast(terrain, gxf, gyf + pyToGrid);
         const lvl  = Math.floor(h / CONTOUR_INTERVAL);
         const lvlR = Math.floor(hR / CONTOUR_INTERVAL);
         const lvlD = Math.floor(hD / CONTOUR_INTERVAL);
@@ -149,7 +135,7 @@ export function render(canvas, ctx, maxDepth) {
       //
       // Curve: alpha = depth^2.5 — steep ramp that suppresses thin films
       // but lets deep channels show strongly.
-      if (viewMode !== 'exposed' && w > (isOcean ? 0.001 : waterThresh)) {
+      if (w > (isOcean ? 0.001 : waterThresh)) {
         const depth = Math.min(1, w / REF_DEPTH);
         const alphaMin = state.waterAlphaMin || 0.15;
         const alphaDepth = state.waterAlphaDepth || 0.85;
@@ -279,6 +265,75 @@ export function render(canvas, ctx, maxDepth) {
         ctx.lineTo(ex + ax + ay * 0.4, ey + ay - ax * 0.4);
         ctx.fill();
       }
+    }
+  }
+
+  // Off-screen river markers — drawn on map edges
+  if (state.offscreenRivers) {
+    for (const rv of state.offscreenRivers) {
+      // Compute current animated position in screen space (phase is advanced in sim, not here)
+      const swayPos = rv.swayAmp * Math.sin(rv.swayPhase);
+      const curT = Math.max(0.01, Math.min(0.99, rv.edgeT + swayPos));
+      const angOsc = rv.swayAmp * (Math.PI / 3) * Math.sin(rv.swayPhase + 1.1);
+      const curAng = rv.angle + angOsc;
+
+      // Compute screen coordinates of the entry point
+      let ex, ey, arrowDirX, arrowDirY;
+      if (rv.edge === 'left') {
+        ex = g2sx(0); ey = g2sy(curT * GH);
+        arrowDirX = Math.cos(curAng); arrowDirY = Math.sin(curAng);
+      } else if (rv.edge === 'right') {
+        ex = g2sx(GW); ey = g2sy(curT * GH);
+        arrowDirX = -Math.cos(curAng); arrowDirY = Math.sin(curAng);
+      } else if (rv.edge === 'top') {
+        ex = g2sx(curT * GW); ey = g2sy(0);
+        arrowDirX = Math.sin(curAng); arrowDirY = Math.cos(curAng);
+      } else {
+        ex = g2sx(curT * GW); ey = g2sy(GH);
+        arrowDirX = Math.sin(curAng); arrowDirY = -Math.cos(curAng);
+      }
+
+      const color = rv.enabled ? '#6ecbf5' : '#444';
+      const len = 18, headLen = 6;
+
+      // Arrow body
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = rv.enabled ? 0.9 : 0.4;
+      ctx.beginPath();
+      ctx.moveTo(ex - arrowDirX * len, ey - arrowDirY * len);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      // Arrowhead
+      ctx.fillStyle = color;
+      const ax = -arrowDirX * headLen, ay = -arrowDirY * headLen;
+      const px2 = -arrowDirY * headLen * 0.5, py2 = arrowDirX * headLen * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex + ax - px2, ey + ay - py2);
+      ctx.lineTo(ex + ax + px2, ey + ay + py2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Width indicator along edge
+      const edgeLen2 = (rv.edge === 'left' || rv.edge === 'right') ? GH : GW;
+      const halfW = rv.width * edgeLen2 * 0.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = rv.enabled ? 0.5 : 0.2;
+      ctx.beginPath();
+      if (rv.edge === 'left' || rv.edge === 'right') {
+        const bx = g2sx(rv.edge === 'left' ? 0 : GW);
+        ctx.moveTo(bx, g2sy(rv.edgeT * GH - halfW));
+        ctx.lineTo(bx, g2sy(rv.edgeT * GH + halfW));
+      } else {
+        const by = g2sy(rv.edge === 'top' ? 0 : GH);
+        ctx.moveTo(g2sx(rv.edgeT * GW - halfW), by);
+        ctx.lineTo(g2sx(rv.edgeT * GW + halfW), by);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 
