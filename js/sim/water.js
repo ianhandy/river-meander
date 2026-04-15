@@ -37,7 +37,7 @@ import { MIN_WATER } from '../data/constants.js';
 import { getOceanLevel } from '../util/ocean.js';
 import { getBeachiness } from '../util/helpers.js';
 
-const BED_GRAVITY_COEFF = 0.6;
+const BED_GRAVITY_COEFF = 1.5;
 
 export function stepWater() {
   const { terrain, water, fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
@@ -178,8 +178,8 @@ export function stepWater() {
       //
       // The coefficient is small enough that it doesn't dominate gravity
       // but large enough to sustain flow across flat channel floors.
-      const MOMENTUM_COEFF = 0.15;
-      if (flowSpeed[i] > 0.15 && w > 0.003) {
+      const MOMENTUM_COEFF = 0.5;
+      if (flowSpeed[i] > 0.08 && w > 0.001) {
         const momentum = flowSpeed[i] * w * MOMENTUM_COEFF;
         // Find dominant outflow direction and boost it
         let maxF = fluxL[i], maxD = 0;
