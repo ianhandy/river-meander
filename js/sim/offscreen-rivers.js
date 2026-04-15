@@ -60,6 +60,13 @@ export function stepOffscreenRivers() {
   const { offscreenRivers, GW, GH, water, fluxL, fluxR, fluxU, fluxD, isOceanCell } = state;
   if (!offscreenRivers || !water) return;
 
+  // Mark cells receiving off-screen river water so edge drainage skips them
+  const N = GW * GH;
+  if (!state.riverEdgeCell || state.riverEdgeCell.length !== N) {
+    state.riverEdgeCell = new Uint8Array(N);
+  }
+  state.riverEdgeCell.fill(0);
+
   for (const rv of offscreenRivers) {
     if (!rv.enabled) continue;
 
@@ -104,23 +111,39 @@ export function stepOffscreenRivers() {
     const center = Math.round(curT * (edgeLen - 1));
     const halfW  = Math.max(1, Math.round(rv.width * edgeLen * 0.5));
 
+    // Inject water at the edge AND 1-2 rows inside so water gets past
+    // the edge drainage zone (which removes 30%/step at boundary cells).
+    // The inner rows get less water (decaying with depth from edge).
+    const INJECT_DEPTH = 3; // how many rows inside the edge to seed
+
     for (let d = -halfW; d <= halfW; d++) {
       const along = center + d;
       if (along < 0 || along >= edgeLen) continue;
       const falloff = 1 - Math.abs(d) / (halfW + 1);
-      const i = getIdx(along);
-      if (isOceanCell && isOceanCell[i]) continue;
 
-      const inj = rv.rate * falloff;
-      water[i] += inj;
+      for (let row = 0; row < INJECT_DEPTH; row++) {
+        let i;
+        if (rv.edge === 'left')        i = along * GW + row;
+        else if (rv.edge === 'right')  i = along * GW + (GW - 1 - row);
+        else if (rv.edge === 'top')    i = row * GW + along;
+        else /* bottom */              i = (GH - 1 - row) * GW + along;
 
-      // Perpendicular component (inward)
-      if (cosA > 0) perpPos[i] += inj * cosA;
-      else          perpNeg[i] -= inj * cosA;
+        if (i < 0 || i >= N) continue;
+        if (isOceanCell && isOceanCell[i]) continue;
 
-      // Lateral component (along edge)
-      if (sinA > 0) latPos[i] += inj * sinA;
-      else          latNeg[i] -= inj * sinA;
+        const rowDecay = 1 - row * 0.3; // inner rows get less: 1.0, 0.7, 0.4
+        const inj = rv.rate * falloff * rowDecay;
+        water[i] += inj;
+        state.riverEdgeCell[i] = 1; // mark: skip edge drainage
+
+        // Flux bias only on the edge row (inner rows get water but not forced direction)
+        if (row === 0) {
+          if (cosA > 0) perpPos[i] += inj * cosA;
+          else          perpNeg[i] -= inj * cosA;
+          if (sinA > 0) latPos[i] += inj * sinA;
+          else          latNeg[i] -= inj * sinA;
+        }
+      }
     }
   }
 }

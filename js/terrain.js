@@ -57,20 +57,19 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       riverPath.push({ x: px, y: py, h });
     }
 
-    // ── Phase 2: Distance field ──
+    // ── Phase 2: Distance field (projection-based, same as river_valley) ──
     const pathDist = new Float32Array(N);
     const pathH    = new Float32Array(N);
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
-        let minD2 = Infinity, bestH = 0;
-        for (const p of riverPath) {
-          const dx = x - p.x, dy = y - p.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < minD2) { minD2 = d2; bestH = p.h; }
-        }
+        // Delta path runs top→bottom, so projection ≈ y / GH
+        const pt = Math.max(0, Math.min(1, y / (GH - 1)));
+        const k = Math.min(pathSteps, Math.round(pt * pathSteps));
+        const rp = riverPath[k];
+        const dx = x - rp.x, dy = y - rp.y;
         const i = y * GW + x;
-        pathDist[i] = Math.sqrt(minD2);
-        pathH[i] = bestH;
+        pathDist[i] = Math.sqrt(dx * dx + dy * dy);
+        pathH[i] = rp.h;
       }
     }
 
@@ -150,24 +149,39 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       }
     }
 
-    // Monotonic enforcement along delta spine + BFS inner channel flatten
+    // Monotonic enforcement — Bresenham rasterized (same as river_valley)
     {
-      let ceiling = riverPath[0].h + 0.001;
-      for (const p of riverPath) {
-        const ix = Math.round(p.x), iy = Math.round(p.y);
-        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
-        const idx = iy * GW + ix;
+      const spineCells = [];
+      const onSpine = new Uint8Array(N);
+      const addCell = (cx, cy) => {
+        if (cx < 0 || cx >= GW || cy < 0 || cy >= GH) return;
+        const idx = cy * GW + cx;
+        if (!onSpine[idx]) { onSpine[idx] = 1; spineCells.push(idx); }
+      };
+      for (let k = 0; k < riverPath.length - 1; k++) {
+        let x0 = Math.round(riverPath[k].x),   y0 = Math.round(riverPath[k].y);
+        const x1 = Math.round(riverPath[k+1].x), y1 = Math.round(riverPath[k+1].y);
+        const adx = Math.abs(x1 - x0), ady = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        let err = adx - ady;
+        while (true) {
+          addCell(x0, y0);
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 > -ady) { err -= ady; x0 += sx; }
+          if (e2 <  adx) { err += adx; y0 += sy; }
+        }
+      }
+      let ceiling = t[spineCells[0]] + 0.001;
+      for (const idx of spineCells) {
         if (t[idx] >= ceiling) t[idx] = Math.max(0.005, ceiling - 0.004);
         ceiling = t[idx];
       }
       const visited = new Uint8Array(N);
       const nearH   = new Float32Array(N);
       const queue    = [];
-      for (const p of riverPath) {
-        const ix = Math.round(p.x), iy = Math.round(p.y);
-        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
-        const idx = iy * GW + ix;
-        if (!visited[idx]) { visited[idx] = 1; nearH[idx] = t[idx]; queue.push(idx); }
+      for (const idx of spineCells) {
+        visited[idx] = 1; nearH[idx] = t[idx]; queue.push(idx);
       }
       let head = 0;
       while (head < queue.length) {
@@ -380,20 +394,40 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       riverPath.push({ x: px, y: py, h });
     }
 
-    // ── Phase 3: Distance field — for each cell, nearest river point ──
+    // ── Phase 3: Row-based distance field ───────────────────────────────
+    // For each row y, find the path point at that latitude. Since the path
+    // always progresses entry→ocean (y always increases along the path),
+    // each row maps to exactly one path crossing.  Every cell in a row
+    // shares the same river height → heights are monotonically decreasing
+    // by construction, with zero inversions at meander bends.
+    //
+    // pathDist = lateral distance |x - riverX(y)|
+    // pathH    = river height at row y (monotonically decreasing)
+    const rowRiverX = new Float32Array(GH);
+    const rowRiverH = new Float32Array(GH);
+    for (let y = 0; y < GH; y++) {
+      let bestDy = Infinity, bestK = 0;
+      for (let k = 0; k < riverPath.length; k++) {
+        const dy = Math.abs(y - riverPath[k].y);
+        if (dy < bestDy) { bestDy = dy; bestK = k; }
+      }
+      rowRiverX[y] = riverPath[bestK].x;
+      rowRiverH[y] = riverPath[bestK].h;
+    }
+    // Force monotonic decrease across rows (handles ties / slight backtrack)
+    let ceil = rowRiverH[0] + 0.001;
+    for (let y = 0; y < GH; y++) {
+      if (rowRiverH[y] >= ceil) rowRiverH[y] = ceil - 0.0003;
+      ceil = rowRiverH[y];
+    }
+
     const pathDist = new Float32Array(N);
     const pathH    = new Float32Array(N);
     for (let y = 0; y < GH; y++) {
       for (let x = 0; x < GW; x++) {
-        let minD2 = Infinity, bestH = 0;
-        for (let p = 0; p < riverPath.length; p++) {
-          const dx = x - riverPath[p].x, dy = y - riverPath[p].y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < minD2) { minD2 = d2; bestH = riverPath[p].h; }
-        }
         const i = y * GW + x;
-        pathDist[i] = Math.sqrt(minD2);
-        pathH[i] = bestH;
+        pathDist[i] = Math.abs(x - rowRiverX[y]);
+        pathH[i] = rowRiverH[y];
       }
     }
 
@@ -470,17 +504,37 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
     }
 
     // ── Phase 4b: Enforce monotonic decrease along river spine ──────────
-    // The distance-field approach creates height inversions at meander
-    // bends: a cell in the crook of a bend maps to an upstream (higher)
-    // path point instead of the downstream one, creating a dam.
-    // Fix: walk the path and force each cell strictly below the previous.
-    // Then BFS outward to flatten the inner channel floor.
+    // Rasterize the parametric path onto the grid with Bresenham lines
+    // so every grid cell is visited (no gaps when the path moves fast
+    // at meander bends). Then BFS outward to flatten the inner channel.
     {
-      let ceiling = riverPath[0].h + 0.001;
-      for (const p of riverPath) {
-        const ix = Math.round(p.x), iy = Math.round(p.y);
-        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
-        const idx = iy * GW + ix;
+      // Bresenham line: visits every grid cell between (x0,y0)→(x1,y1)
+      const spineCells = []; // ordered list of grid indices along spine
+      const onSpine = new Uint8Array(N);
+      const addCell = (cx, cy) => {
+        if (cx < 0 || cx >= GW || cy < 0 || cy >= GH) return;
+        const idx = cy * GW + cx;
+        if (!onSpine[idx]) { onSpine[idx] = 1; spineCells.push(idx); }
+      };
+      for (let k = 0; k < riverPath.length - 1; k++) {
+        let x0 = Math.round(riverPath[k].x),   y0 = Math.round(riverPath[k].y);
+        const x1 = Math.round(riverPath[k+1].x), y1 = Math.round(riverPath[k+1].y);
+        const adx = Math.abs(x1 - x0), ady = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        let err = adx - ady;
+        while (true) {
+          addCell(x0, y0);
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 > -ady) { err -= ady; x0 += sx; }
+          if (e2 <  adx) { err += adx; y0 += sy; }
+        }
+      }
+
+      // Monotonic enforcement: walk rasterized spine, force each cell
+      // strictly below the previous. No gaps possible.
+      let ceiling = t[spineCells[0]] + 0.001;
+      for (const idx of spineCells) {
         if (t[idx] >= ceiling) t[idx] = Math.max(0.005, ceiling - 0.004);
         ceiling = t[idx];
       }
@@ -490,15 +544,10 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
       const visited = new Uint8Array(N);
       const nearH   = new Float32Array(N);
       const queue    = [];
-      for (const p of riverPath) {
-        const ix = Math.round(p.x), iy = Math.round(p.y);
-        if (ix < 0 || ix >= GW || iy < 0 || iy >= GH) continue;
-        const idx = iy * GW + ix;
-        if (!visited[idx]) {
-          visited[idx] = 1;
-          nearH[idx] = t[idx];
-          queue.push(idx);
-        }
+      for (const idx of spineCells) {
+        visited[idx] = 1;
+        nearH[idx] = t[idx];
+        queue.push(idx);
       }
       let head = 0;
       while (head < queue.length) {
@@ -514,7 +563,6 @@ export function generateTerrain(seed, octaves, valleyDepthFrac, roughness, type,
           visited[ni] = d + 1;
           nearH[ni] = nearH[idx];
           queue.push(ni);
-          // Force inner channel floor: no higher than spine + bank rise
           const target = nearH[ni] + (d * 0.001);
           if (t[ni] > target) t[ni] = target;
         }
