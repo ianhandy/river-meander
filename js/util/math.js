@@ -1,7 +1,7 @@
 // Shared math utilities used by rendering, terrain, and simulation
 
-import state from './state.js';
-import { ELEV_STOPS } from './constants.js';
+import state from '../data/state.js';
+import { ELEV_STOPS } from '../data/constants.js';
 
 export function lerp(a, b, t) { return a + (b - a) * t; }
 

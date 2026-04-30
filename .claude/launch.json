@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "river-meander",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["serve.py", "8091"],
+      "port": 8091
+    }
+  ]
+}

@@ -1,10 +1,11 @@
 // UI controls — dev panel, bar settings, view toggles, legends
+// The dev panel auto-generates sliders from the PARAMS registry.
 
-import state from './state.js';
-import { SIM_DEFAULTS } from './constants.js';
-import { init3D } from './render3d.js';
+import state from '../data/state.js';
+import { PARAMS, PARAM_DEFAULTS } from '../data/constants.js';
+import { init3D } from '../render/render3d.js';
 
-// ── View / toggle functions ──
+// ── View / toggle functions ──────────────────────────────────────────────────
 
 export function togglePlay() {
   state.running = !state.running;
@@ -12,17 +13,13 @@ export function togglePlay() {
   btn.textContent = state.running ? '\u23F8 Pause' : '\u25B6 Play';
   btn.classList.toggle('active', state.running);
   const btn2 = document.getElementById('btn-play2');
-  if (btn2) {
-    btn2.textContent = state.running ? '\u23F8' : '\u25B6';
-  }
+  if (btn2) btn2.textContent = state.running ? '\u23F8' : '\u25B6';
 }
 
 export function setView(mode, c3d) {
   state.viewMode = mode;
   document.getElementById('btn-view-terrain').classList.toggle('active', mode === 'terrain');
   document.getElementById('btn-view-height').classList.toggle('active', mode === 'height');
-  document.getElementById('btn-view-exposed').classList.toggle('active', mode === 'exposed');
-  document.getElementById('btn-view-material').classList.toggle('active', mode === 'material');
   document.getElementById('btn-view-3d').classList.toggle('active', mode === '3d');
   document.getElementById('c').classList.toggle('hidden-2d', mode === '3d');
   document.getElementById('c3d').classList.toggle('active-3d', mode === '3d');
@@ -35,8 +32,6 @@ export function updateLegend() {
   const vm = state.viewMode;
   document.getElementById('legend-terrain').style.display = (vm === 'terrain' && !state.showLayers && !state.showPressure && !state.showVelocity) ? '' : 'none';
   document.getElementById('legend-height').style.display = vm === 'height' ? '' : 'none';
-  document.getElementById('legend-exposed').style.display = vm === 'exposed' ? '' : 'none';
-  document.getElementById('legend-material').style.display = vm === 'material' ? '' : 'none';
   document.getElementById('legend-layers').style.display = (state.showLayers && !state.showPressure && !state.showVelocity) ? '' : 'none';
   document.getElementById('legend-pressure').style.display = state.showPressure ? '' : 'none';
   document.getElementById('legend-velocity').style.display = state.showVelocity ? '' : 'none';
@@ -73,42 +68,17 @@ export function toggleVelocity() {
   saveBarSettings();
 }
 
-// ── Dev panel ──
+// ── Dev panel ────────────────────────────────────────────────────────────────
+// Auto-generated from PARAMS registry. Each parameter gets a slider,
+// value display, tick buttons, and click-to-edit.
 
-const DEV_BINDINGS = [
-  ['dev-gravity',     'SIM_GRAVITY',        'dev-gravity-val'],
-  ['dev-dt',          'SIM_DT',             'dev-dt-val'],
-  ['dev-spring',      'SIM_SPRING_RATE',    'dev-spring-val'],
-  ['dev-evap',        'SIM_EVAP',           'dev-evap-val'],
-  ['dev-absorb',      'SIM_ABSORB',         'dev-absorb-val'],
-  ['dev-kc',          'SIM_Kc',             'dev-kc-val'],
-  ['dev-ks',          'SIM_Ks',             'dev-ks-val'],
-  ['dev-kd',          'SIM_Kd',             'dev-kd-val'],
-  ['dev-kt',          'SIM_Kt',             'dev-kt-val'],
-  ['dev-slope',       'SIM_SLOPE_COLLAPSE', 'dev-slope-val'],
-  ['dev-tspeed',      'SIM_TECTONIC_SPEED', 'dev-tspeed-val'],
-  ['dev-uplift',      'SIM_UPLIFT_RATE',    'dev-uplift-val'],
-  ['dev-rift',        'SIM_RIFT_RATE',      'dev-rift-val'],
-  ['dev-quake',       'SIM_QUAKE_THRESHOLD','dev-quake-val'],
-  ['dev-ferode',      'SIM_FAULT_EROSION',  'dev-ferode-val'],
-  ['dev-hscale',      'SIM_HEIGHT_SCALE',   'dev-hscale-val'],
-  ['dev-wthresh',     'SIM_WATER_THRESH',   'dev-wthresh-val'],
-  ['dev-pw',          'SIM_PRESSURE_WT',    'dev-pw-val'],
-  ['dev-asymmetry',   'SIM_MEANDER_ASYMMETRY', 'dev-asymmetry-val'],
-  ['dev-lateral',     'SIM_LATERAL_RATE',   'dev-lateral-val'],
-  ['dev-stag-evap',   'SIM_STAGNANT_EVAP',  'dev-stag-evap-val'],
-  ['dev-stag-absorb', 'SIM_STAGNANT_ABSORB','dev-stag-absorb-val'],
-  ['dev-move-evap',   'SIM_MOVING_EVAP',    'dev-move-evap-val'],
-  ['dev-move-absorb', 'SIM_MOVING_ABSORB',  'dev-move-absorb-val'],
-  ['dev-viscous',     'SIM_VISCOUS_DAMPING', 'dev-viscous-val'],
-  ['dev-erode-wmin',  'SIM_ERODE_WATER_MIN', 'dev-erode-wmin-val'],
-  ['dev-erode-smin',  'SIM_ERODE_SPEED_MIN', 'dev-erode-smin-val'],
-  ['dev-lat-stag',    'SIM_LATERAL_STAGNANT','dev-lat-stag-val'],
-  ['dev-lat-move',    'SIM_LATERAL_MOVING',  'dev-lat-move-val'],
-  ['dev-talus-noise', 'SIM_TALUS_NOISE',     'dev-talus-noise-val'],
-  ['dev-repose-min',  'SIM_REPOSE_MIN',      'dev-repose-min-val'],
-  ['dev-repose-max',  'SIM_REPOSE_MAX',      'dev-repose-max-val'],
-];
+// Map PARAMS keys to DOM element IDs
+const DEV_BINDINGS = [];
+for (const [key, p] of Object.entries(PARAMS)) {
+  const id = `dev-${key}`;
+  const valId = `dev-${key}-val`;
+  DEV_BINDINGS.push([id, key, valId]);
+}
 
 const DEV_HTML_DEFAULTS = {};
 
@@ -122,7 +92,8 @@ function applyDevValue(id, key, valId, value) {
   el.value = value;
   const v = parseFloat(value);
   state[key] = v;
-  document.getElementById(valId).textContent = formatDevVal(v);
+  const valEl = document.getElementById(valId);
+  if (valEl) valEl.textContent = formatDevVal(v);
 }
 
 function saveDevSettings() {
@@ -134,13 +105,14 @@ function saveDevSettings() {
   localStorage.setItem('riverMeanderDev', JSON.stringify(settings));
 }
 
-const SETTINGS_VERSION = 9; // bump to invalidate stale localStorage
+const SETTINGS_VERSION = 34; // bump to invalidate stale localStorage
 
 function loadDevSettings() {
   try {
     const ver = parseInt(localStorage.getItem('riverMeanderDevVer') || '0');
     if (ver < SETTINGS_VERSION) {
       localStorage.removeItem('riverMeanderDev');
+      localStorage.removeItem('riverMeanderBar');
       localStorage.setItem('riverMeanderDevVer', SETTINGS_VERSION);
       return;
     }
@@ -158,7 +130,7 @@ function resetDevDefaults() {
   localStorage.removeItem('riverMeanderDev');
 }
 
-// ── Bottom bar slider persistence ──
+// ── Bottom bar slider persistence ────────────────────────────────────────────
 
 const BAR_SLIDER_MAP = {
   'speed': 'speedUI',
@@ -197,7 +169,7 @@ function loadBarSettings(c3d) {
       const el = document.getElementById(id);
       if (el && s[id] !== undefined) el.value = s[id];
     });
-    if (s.viewMode) setView(s.viewMode, c3d);
+    setView(s.viewMode || state.viewMode, c3d);
     if (s.showContours === false) toggleContours();
     if (s.showLayers === true) toggleLayers();
     if (s.showPressure === true) togglePressure();
@@ -221,9 +193,78 @@ export function resetAllDefaults(c3d) {
   syncBarToState();
 }
 
-// ── Initialize all UI ──
+// ── Build dev panel DOM from PARAMS ──────────────────────────────────────────
+
+function buildDevPanel() {
+  const container = document.getElementById('dev-sliders');
+  if (!container) return;
+
+  // Group params
+  const groups = {};
+  for (const [key, p] of Object.entries(PARAMS)) {
+    const g = p.group || 'other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push({ key, ...p });
+  }
+
+  const groupLabels = {
+    water: 'Water Physics',
+    erosion: 'Stream Power Erosion',
+    diffusion: 'Terrain Diffusion',
+    tectonics: 'Tectonics',
+    display: 'Display',
+  };
+
+  container.innerHTML = '';
+
+  for (const [groupKey, params] of Object.entries(groups)) {
+    const header = document.createElement('div');
+    header.className = 'dev-group-header';
+    header.textContent = groupLabels[groupKey] || groupKey;
+    container.appendChild(header);
+
+    for (const p of params) {
+      const row = document.createElement('div');
+      row.className = 'dev-row';
+
+      const label = document.createElement('label');
+      label.textContent = p.key;
+      label.className = 'dev-label';
+      if (p.desc) label.title = `${p.desc}${p.unit ? ` (${p.unit})` : ''}`;
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.id = `dev-${p.key}`;
+      slider.min = p.min;
+      slider.max = p.max;
+      slider.step = p.step;
+      slider.value = p.val;
+      slider.className = 'dev-slider';
+
+      const valSpan = document.createElement('span');
+      valSpan.id = `dev-${p.key}-val`;
+      valSpan.className = 'dev-val';
+      valSpan.textContent = formatDevVal(p.val);
+
+      const unitSpan = document.createElement('span');
+      unitSpan.className = 'dev-unit';
+      unitSpan.textContent = p.unit || '';
+
+      row.appendChild(label);
+      row.appendChild(slider);
+      row.appendChild(valSpan);
+      if (p.unit) row.appendChild(unitSpan);
+      container.appendChild(row);
+    }
+  }
+}
+
+// ── Initialize all UI ────────────────────────────────────────────────────────
 
 export function initUI(c3d) {
+  // Build dev panel from PARAMS registry
+  buildDevPanel();
+
   // Capture HTML defaults before loading saved state
   DEV_BINDINGS.forEach(([id]) => {
     const el = document.getElementById(id);
@@ -239,60 +280,50 @@ export function initUI(c3d) {
     const el = document.getElementById(id);
     if (!el) return;
     const step = parseFloat(el.step) || 1;
-    const min = parseFloat(el.min);
-    const max = parseFloat(el.max);
 
-    // Set initial state from HTML default
     state[key] = parseFloat(el.value);
-    document.getElementById(valId).textContent = formatDevVal(parseFloat(el.value));
+    const valEl = document.getElementById(valId);
+    if (valEl) valEl.textContent = formatDevVal(parseFloat(el.value));
 
     el.addEventListener('input', () => {
       const v = parseFloat(el.value);
       state[key] = v;
-      document.getElementById(valId).textContent = formatDevVal(v);
+      if (valEl) valEl.textContent = formatDevVal(v);
       saveDevSettings();
     });
 
-    // Add up/down tick buttons after the value display
-    const valEl = document.getElementById(valId);
+    // Tick buttons
     if (!valEl) return;
     const ticks = document.createElement('div');
     ticks.className = 'dev-ticks';
     const btnUp = document.createElement('button');
     btnUp.className = 'dev-tick';
-    btnUp.textContent = '▲';
+    btnUp.textContent = '\u25B2';
     btnUp.tabIndex = -1;
     const btnDown = document.createElement('button');
     btnDown.className = 'dev-tick';
-    btnDown.textContent = '▼';
+    btnDown.textContent = '\u25BC';
     btnDown.tabIndex = -1;
-
     const nudge = (dir) => {
-      const cur = state[key]; // read from state, not slider (may exceed slider range)
+      const cur = state[key];
       const next = Math.max(0, +(cur + step * dir).toPrecision(10));
-      el.value = next; // slider clamps visually
+      el.value = next;
       state[key] = next;
       valEl.textContent = formatDevVal(next);
       saveDevSettings();
     };
     btnUp.addEventListener('click', (e) => { e.stopPropagation(); nudge(1); });
     btnDown.addEventListener('click', (e) => { e.stopPropagation(); nudge(-1); });
-
     ticks.appendChild(btnUp);
     ticks.appendChild(btnDown);
     valEl.parentNode.insertBefore(ticks, valEl.nextSibling);
-  });
 
-  // Click-to-edit numeric values
-  DEV_BINDINGS.forEach(([id, key, valId]) => {
-    const valEl = document.getElementById(valId);
-    const sliderEl = document.getElementById(id);
-    if (!valEl || !sliderEl) return;
+    // Click-to-edit
     valEl.addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'dev-val-input';
-      input.value = sliderEl.value;
+      input.value = el.value;
       const origText = valEl.textContent;
       valEl.textContent = '';
       valEl.appendChild(input);
@@ -301,8 +332,8 @@ export function initUI(c3d) {
       const commit = () => {
         const v = parseFloat(input.value);
         if (!isNaN(v)) {
-          const actual = Math.max(0, v); // any non-negative value
-          sliderEl.value = actual; // slider clamps visually, that's fine
+          const actual = Math.max(0, v);
+          el.value = actual;
           state[key] = actual;
           valEl.textContent = formatDevVal(actual);
           saveDevSettings();
@@ -324,14 +355,12 @@ export function initUI(c3d) {
     if (el) el.addEventListener('input', () => { syncBarToState(); saveBarSettings(); });
   });
 
-  // Wire button events (replacing inline onclick)
+  // Wire button events
   document.getElementById('btn-play').addEventListener('click', togglePlay);
   const btnPlay2 = document.getElementById('btn-play2');
   if (btnPlay2) btnPlay2.addEventListener('click', togglePlay);
   document.getElementById('btn-view-terrain').addEventListener('click', () => setView('terrain', c3d));
   document.getElementById('btn-view-height').addEventListener('click', () => setView('height', c3d));
-  document.getElementById('btn-view-exposed').addEventListener('click', () => setView('exposed', c3d));
-  document.getElementById('btn-view-material').addEventListener('click', () => setView('material', c3d));
   document.getElementById('btn-view-3d').addEventListener('click', () => setView('3d', c3d));
   document.getElementById('btn-contours').addEventListener('click', toggleContours);
   document.getElementById('btn-layers').addEventListener('click', toggleLayers);
@@ -345,12 +374,6 @@ export function initUI(c3d) {
     document.getElementById('dev-panel').classList.toggle('hidden');
   });
 
-  // Vertical erosion toggle
-  document.getElementById('btn-vert-erode').addEventListener('click', () => {
-    state.SIM_VERTICAL_EROSION = !state.SIM_VERTICAL_EROSION;
-    document.getElementById('btn-vert-erode').classList.toggle('active', state.SIM_VERTICAL_EROSION);
-  });
-
   // 1:1 realtime toggle
   const btnRT = document.getElementById('btn-realtime');
   if (btnRT) {
@@ -360,25 +383,49 @@ export function initUI(c3d) {
     });
   }
 
+  // Equations toggle (E key)
+  const btnEq = document.getElementById('btn-equations');
+  if (btnEq) {
+    btnEq.addEventListener('click', () => {
+      state.showEquations = !state.showEquations;
+      btnEq.classList.toggle('active', state.showEquations);
+    });
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'e' || e.key === 'E') {
+      state.showEquations = !state.showEquations;
+      const btn = document.getElementById('btn-equations');
+      if (btn) btn.classList.toggle('active', state.showEquations);
+    }
+  });
+
+  // Stream highlight toggle
+  const btnStreams = document.getElementById('btn-streams');
+  if (btnStreams) {
+    btnStreams.addEventListener('click', () => {
+      state.showStreams = !state.showStreams;
+      btnStreams.classList.toggle('active', state.showStreams);
+    });
+  }
+
   // Fault lines toggle
   document.getElementById('btn-faults').addEventListener('click', () => {
     state.showFaultLines = !state.showFaultLines;
     document.getElementById('btn-faults').classList.toggle('active', state.showFaultLines);
   });
 
-  // Reset all defaults button
-  document.getElementById('dev-panel').querySelector('button').addEventListener('click', () => resetAllDefaults(c3d));
+  // Reset all defaults
+  const resetBtn = document.getElementById('dev-reset');
+  if (resetBtn) resetBtn.addEventListener('click', () => resetAllDefaults(c3d));
 
-  // Dev presets — shift+click to save, click to load
+  // Dev presets
   document.querySelectorAll('.dev-preset').forEach(btn => {
     const idx = btn.dataset.preset;
     const key = 'riverMeanderPreset' + idx;
-    // Check if preset has saved data
     if (localStorage.getItem(key)) btn.classList.add('has-data');
-
     btn.addEventListener('click', (e) => {
       if (e.shiftKey) {
-        // Save current slider values
         const settings = {};
         DEV_BINDINGS.forEach(([id]) => {
           const el = document.getElementById(id);
@@ -387,7 +434,6 @@ export function initUI(c3d) {
         localStorage.setItem(key, JSON.stringify(settings));
         btn.classList.add('has-data');
       } else {
-        // Load preset
         try {
           const saved = JSON.parse(localStorage.getItem(key) || '{}');
           if (Object.keys(saved).length === 0) return;

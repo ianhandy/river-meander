@@ -1,8 +1,10 @@
 // Canvas interactions — pan, zoom, carve, source placement, cell inspector
 
-import state from './state.js';
-import { LAYERS, LAYER_NAMES } from './constants.js';
-import { layerColor } from './helpers.js';
+import state from '../data/state.js';
+import { LAYERS } from '../data/constants.js';
+import { layerColor } from '../util/helpers.js';
+import { updateEquationsTooltip, hideEquationsTooltip } from './equations-panel.js';
+import { createOffscreenRiver } from '../sim/offscreen-rivers.js';
 
 export function initTools(canvas) {
 
@@ -16,13 +18,11 @@ export function initTools(canvas) {
     return { gx, gy, clientX: e.clientX, clientY: e.clientY };
   }
 
-  // ── Tool panel state ──
-  let activeToolMode = 'pan'; // 'pan' | 'carve' | 'flow'
-  let carveAdd = false;       // false = dig, true = raise
+  let activeToolMode = 'pan';
+  let carveAdd = false;
   let carveSize = 3;
-  let carveStrength = 0.04;   // mapped from slider 1-100
+  let carveStrength = 0.04;
 
-  // Tool panel elements
   const btnPan = document.getElementById('tbtn-pan');
   const btnCarve = document.getElementById('tbtn-carve');
   const btnFlow = document.getElementById('tbtn-flow');
@@ -41,8 +41,7 @@ export function initTools(canvas) {
     btnFlow.classList.toggle('active', mode === 'flow');
     carveOpts.style.display = mode === 'carve' ? '' : 'none';
     canvas.style.cursor = mode === 'carve' ? 'crosshair'
-                        : mode === 'flow' ? 'pointer'
-                        : 'grab';
+                        : mode === 'flow' ? 'pointer' : 'grab';
   }
 
   btnPan.addEventListener('click', () => setToolMode('pan'));
@@ -69,7 +68,6 @@ export function initTools(canvas) {
     carveStrVal.textContent = carveStrSlider.value;
   });
 
-  // Keyboard shortcuts still work
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 't' || e.key === 'T') { setToolMode('carve'); e.preventDefault(); }
@@ -77,10 +75,8 @@ export function initTools(canvas) {
     if (e.key === 'Escape') { setToolMode('pan'); }
   });
 
-  // ── Carving ──
-
   function carveAt(gx, gy) {
-    const { terrain, origTerrain, GW, GH } = state;
+    const { terrain, GW, GH } = state;
     const r = carveSize;
     const sign = carveAdd ? 1 : -1;
     for (let dy = -r; dy <= r; dy++) {
@@ -92,17 +88,12 @@ export function initTools(canvas) {
         const falloff = 1 - dd / (r + 0.5);
         const idx = iy * GW + ix;
         terrain[idx] += sign * carveStrength * falloff;
-        if (carveAdd) {
-          // Don't raise above a reasonable cap
-          terrain[idx] = Math.min(1.5, terrain[idx]);
-        } else {
-          terrain[idx] = Math.max(0.01, terrain[idx]);
-        }
+        terrain[idx] = carveAdd ? Math.min(1.5, terrain[idx]) : Math.max(0.01, terrain[idx]);
       }
     }
   }
 
-  // ── Source editor ──
+  // Source editor
   const srcEditor = document.getElementById('source-editor');
   const srcRateSlider = document.getElementById('se-rate');
   const srcRateVal = document.getElementById('se-rate-val');
@@ -149,15 +140,164 @@ export function initTools(canvas) {
     }
   });
 
+  // ── Off-screen river editor ────────────────────────────────────────────────
+  const riverEditor = document.getElementById('river-editor');
+  const reRateSlider = document.getElementById('re-rate');
+  const reRateVal = document.getElementById('re-rate-val');
+  const reSwaySlider = document.getElementById('re-sway');
+  const reSwayVal = document.getElementById('re-sway-val');
+  const rePeriodSlider = document.getElementById('re-period');
+  const rePeriodVal = document.getElementById('re-period-val');
+  const reDeleteBtn = document.getElementById('re-delete');
+  const reAngleBtns = riverEditor.querySelectorAll('.re-angle-btn');
+
+  let editingRiverIdx = null;
+
+  // Correct arrow glyphs for each edge (order matches data-angle: 0, 0.524, 1.047, -0.524, -1.047)
+  const EDGE_ARROWS = {
+    left:   ['→', '↘', '↓', '↗', '↑'],
+    right:  ['←', '↙', '↓', '↖', '↑'],
+    top:    ['↓', '↘', '→', '↙', '←'],
+    bottom: ['↑', '↗', '→', '↖', '←'],
+  };
+
+  function showRiverEditor(rvIdx, clientX, clientY) {
+    editingRiverIdx = rvIdx;
+    const rv = state.offscreenRivers[rvIdx];
+    reRateSlider.value = rv.rate;
+    reRateVal.textContent = rv.rate.toFixed(3);
+    reSwaySlider.value = rv.swayAmp;
+    reSwayVal.textContent = rv.swayAmp.toFixed(2);
+    rePeriodSlider.value = rv.swayPeriod;
+    rePeriodVal.textContent = rv.swayPeriod;
+    // Update arrow glyphs to match actual flow directions for this edge
+    const arrows = EDGE_ARROWS[rv.edge] || EDGE_ARROWS.left;
+    reAngleBtns.forEach((btn, idx) => {
+      btn.textContent = arrows[idx];
+      btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.angle) - rv.angle) < 0.01);
+    });
+    riverEditor.classList.remove('hidden');
+    const ex = Math.min(clientX + 14, window.innerWidth - 210);
+    const ey = Math.min(clientY - 40, window.innerHeight - 240);
+    riverEditor.style.left = ex + 'px';
+    riverEditor.style.top = Math.max(8, ey) + 'px';
+  }
+
+  function hideRiverEditor() {
+    riverEditor.classList.add('hidden');
+    editingRiverIdx = null;
+  }
+
+  reRateSlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].rate = parseFloat(reRateSlider.value);
+      reRateVal.textContent = parseFloat(reRateSlider.value).toFixed(3);
+    }
+  });
+  reSwaySlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].swayAmp = parseFloat(reSwaySlider.value);
+      reSwayVal.textContent = parseFloat(reSwaySlider.value).toFixed(2);
+    }
+  });
+  rePeriodSlider.addEventListener('input', () => {
+    if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+      state.offscreenRivers[editingRiverIdx].swayPeriod = parseInt(rePeriodSlider.value);
+      rePeriodVal.textContent = rePeriodSlider.value;
+    }
+  });
+  reAngleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (editingRiverIdx !== null && state.offscreenRivers[editingRiverIdx]) {
+        state.offscreenRivers[editingRiverIdx].angle = parseFloat(btn.dataset.angle);
+        reAngleBtns.forEach(b => b.classList.toggle('active', b === btn));
+      }
+    });
+  });
+  reDeleteBtn.addEventListener('click', () => {
+    if (editingRiverIdx !== null) {
+      state.offscreenRivers.splice(editingRiverIdx, 1);
+      hideRiverEditor();
+    }
+  });
+
+  // Edge-click detection helpers — detect clicks near the grid boundary
+  function getEdgeHit(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width;
+    const cpx = (clientX - rect.left) * scale;
+    const cpy = (clientY - rect.top) * scale;
+    const W = canvas.width, H = canvas.height;
+    const { GW, GH, camX, camY, camZoom } = state;
+    const viewSize = GW / camZoom;
+    const g2sx = gx => (gx - camX) / viewSize * W;
+    const g2sy = gy => (gy - camY) / viewSize * H;
+    const s2gx = sx => sx / W * viewSize + camX;
+    const s2gy = sy => sy / H * viewSize + camY;
+    const thresh = 18;
+    if (Math.abs(cpx - g2sx(0))  < thresh) return { edge: 'left',   edgeT: Math.max(0.02, Math.min(0.98, s2gy(cpy) / GH)) };
+    if (Math.abs(cpx - g2sx(GW)) < thresh) return { edge: 'right',  edgeT: Math.max(0.02, Math.min(0.98, s2gy(cpy) / GH)) };
+    if (Math.abs(cpy - g2sy(0))  < thresh) return { edge: 'top',    edgeT: Math.max(0.02, Math.min(0.98, s2gx(cpx) / GW)) };
+    if (Math.abs(cpy - g2sy(GH)) < thresh) return { edge: 'bottom', edgeT: Math.max(0.02, Math.min(0.98, s2gx(cpx) / GW)) };
+    return null;
+  }
+
+  function findNearbyRiver(clientX, clientY) {
+    if (!state.offscreenRivers) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width;
+    const cpx = (clientX - rect.left) * scale;
+    const cpy = (clientY - rect.top) * scale;
+    const W = canvas.width, H = canvas.height;
+    const { GW, GH, camX, camY, camZoom } = state;
+    const viewSize = GW / camZoom;
+    const g2sx = gx => (gx - camX) / viewSize * W;
+    const g2sy = gy => (gy - camY) / viewSize * H;
+    let best = null, bestDist = Infinity;
+    for (let i = 0; i < state.offscreenRivers.length; i++) {
+      const rv = state.offscreenRivers[i];
+      // Use animated curT so click target matches the visual marker position
+      const curT = Math.max(0.01, Math.min(0.99, rv.edgeT + rv.swayAmp * Math.sin(rv.swayPhase)));
+      let sx, sy;
+      if (rv.edge === 'left')   { sx = g2sx(0);  sy = g2sy(curT * GH); }
+      if (rv.edge === 'right')  { sx = g2sx(GW); sy = g2sy(curT * GH); }
+      if (rv.edge === 'top')    { sx = g2sx(curT * GW); sy = g2sy(0); }
+      if (rv.edge === 'bottom') { sx = g2sx(curT * GW); sy = g2sy(GH); }
+      const dist = Math.sqrt((cpx - sx) ** 2 + (cpy - sy) ** 2);
+      if (dist < 32 && dist < bestDist) { best = i; bestDist = dist; }
+    }
+    return best;
+  }
+
   document.addEventListener('mousedown', (e) => {
     if (state.editingSourceIdx !== null && !srcEditor.contains(e.target)) {
       hideSourceEditor();
     }
+    if (editingRiverIdx !== null && !riverEditor.contains(e.target)) {
+      hideRiverEditor();
+    }
   });
 
-  // ── Canvas mousedown ──
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !state.terrain) return;
+
+    // Edge click — off-screen river creation / editing (any tool mode)
+    const edgeHit = getEdgeHit(e.clientX, e.clientY);
+    if (edgeHit) {
+      const rvIdx = findNearbyRiver(e.clientX, e.clientY);
+      if (rvIdx !== null) {
+        showRiverEditor(rvIdx, e.clientX, e.clientY);
+      } else {
+        if (!state.offscreenRivers) state.offscreenRivers = [];
+        const rv = createOffscreenRiver(edgeHit.edge, edgeHit.edgeT);
+        state.offscreenRivers.push(rv);
+        showRiverEditor(state.offscreenRivers.length - 1, e.clientX, e.clientY);
+      }
+      e.stopPropagation(); // prevent document listener from immediately closing the popup
+      e.preventDefault();
+      return;
+    }
+
     const { gx, gy, clientX, clientY } = canvasToGrid(e);
     if (gx < 0 || gx >= state.GW || gy < 0 || gy >= state.GH) return;
 
@@ -165,6 +305,7 @@ export function initTools(canvas) {
       const srcIdx = findNearbySource(gx, gy);
       if (srcIdx !== null) {
         showSourceEditor(srcIdx, clientX, clientY);
+        e.stopPropagation(); // prevent document listener from immediately closing the popup
       } else {
         state.sources.push({ gx, gy, rate: 0.06 });
       }
@@ -178,13 +319,11 @@ export function initTools(canvas) {
       return;
     }
 
-    // Shift+click always adds source regardless of mode
     if (e.shiftKey) {
       state.sources.push({ gx, gy, rate: 0.06 });
       return;
     }
 
-    // Pan (default)
     state.isPanning = true;
     state.panStartX = e.clientX;
     state.panStartY = e.clientY;
@@ -194,7 +333,6 @@ export function initTools(canvas) {
     e.preventDefault();
   });
 
-  // Click-and-hold carving
   window.addEventListener('mousemove', (e) => {
     if (state.isCarving && state.terrain) {
       const { gx, gy } = canvasToGrid(e);
@@ -206,7 +344,7 @@ export function initTools(canvas) {
     if (state.isCarving) state.isCarving = false;
   });
 
-  // ── Cell inspector ──
+  // ── Cell inspector + equation tooltip ──────────────────────────────────
   const cellInfoEl = document.getElementById('cell-info');
   let cellInfoTimer = null;
   let lastInspectCell = -1;
@@ -225,6 +363,15 @@ export function initTools(canvas) {
     if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) { cellInfoEl.style.display = 'none'; return; }
 
     const i = gy * GW + gx;
+    state.hoveredCell = i;
+
+    // If equations mode, show equation tooltip instead
+    if (state.showEquations) {
+      cellInfoEl.style.display = 'none';
+      updateEquationsTooltip(clientX, clientY);
+      return;
+    }
+
     const h = terrain[i];
     const w = water ? water[i] : 0;
     const sat = saturation ? saturation[i] : 0;
@@ -232,8 +379,8 @@ export function initTools(canvas) {
     let layerName = 'Unknown';
     try {
       const lc = layerColor(i);
-      const layerIdx = LAYERS.indexOf(lc);
-      layerName = LAYER_NAMES[layerIdx] || 'Unknown';
+      const layerIdx = LAYERS.findIndex(l => l === lc);
+      layerName = lc.name || 'Unknown';
     } catch(e) {}
     const erosionDepth = Math.max(0, origTerrain[i] - h);
     const ocean = isOceanCell ? isOceanCell[i] : false;
@@ -270,7 +417,9 @@ export function initTools(canvas) {
 
     if (state.isPanning || state.isCarving || state.isDraggingTool) {
       cellInfoEl.style.display = 'none';
+      hideEquationsTooltip();
       lastInspectCell = -1;
+      state.hoveredCell = -1;
       return;
     }
 
@@ -282,29 +431,37 @@ export function initTools(canvas) {
     const gy = (state.camY + my * viewSize) | 0;
     const cell = gy * state.GW + gx;
 
-    if (cell === lastInspectCell && cellInfoEl.style.display === 'block') {
-      let left = e.clientX + 15;
-      let top = e.clientY - 10;
-      if (left + 200 > window.innerWidth) left = e.clientX - 210;
-      if (top + 150 > window.innerHeight) top = e.clientY - 150;
-      cellInfoEl.style.left = left + 'px';
-      cellInfoEl.style.top = top + 'px';
+    if (cell === lastInspectCell && (cellInfoEl.style.display === 'block' || state.showEquations)) {
+      // Just update position
+      if (state.showEquations) {
+        updateEquationsTooltip(e.clientX, e.clientY);
+      } else {
+        let left = e.clientX + 15;
+        let top = e.clientY - 10;
+        if (left + 200 > window.innerWidth) left = e.clientX - 210;
+        if (top + 150 > window.innerHeight) top = e.clientY - 150;
+        cellInfoEl.style.left = left + 'px';
+        cellInfoEl.style.top = top + 'px';
+      }
       return;
     }
 
     lastInspectCell = cell;
     cellInfoEl.style.display = 'none';
+    hideEquationsTooltip();
     if (cellInfoTimer) clearTimeout(cellInfoTimer);
     cellInfoTimer = setTimeout(() => showCellInfo(lastMouseX, lastMouseY), 200);
   });
 
   canvas.addEventListener('mouseleave', () => {
     cellInfoEl.style.display = 'none';
+    hideEquationsTooltip();
     lastInspectCell = -1;
+    state.hoveredCell = -1;
     if (cellInfoTimer) { clearTimeout(cellInfoTimer); cellInfoTimer = null; }
   });
 
-  // ── Legacy toolbar drag (kept for source drag from old toolbar) ──
+  // Legacy toolbar drag
   const dragGhost = document.getElementById('drag-ghost');
   const toolSource = document.getElementById('tool-source');
   if (toolSource) {
@@ -337,14 +494,14 @@ export function initTools(canvas) {
         const gx = (state.camX + mx * viewSize) | 0;
         const gy = (state.camY + my * viewSize) | 0;
         if (gx >= 0 && gx < state.GW && gy >= 0 && gy < state.GH) {
-          state.sources.push({ gx, gy, rate: state.SIM_SPRING_RATE });
+          state.sources.push({ gx, gy, rate: state.springRate });
         }
       }
     }
     state.dragToolType = null;
   });
 
-  // ── Zoom ──
+  // Zoom
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
@@ -360,7 +517,7 @@ export function initTools(canvas) {
     clampCam();
   }, { passive: false });
 
-  // ── Pan ──
+  // Pan
   window.addEventListener('mousemove', (e) => {
     if (!state.isPanning) return;
     const viewSize = state.GW / state.camZoom;
@@ -375,12 +532,10 @@ export function initTools(canvas) {
     if (state.isPanning) {
       state.isPanning = false;
       canvas.style.cursor = activeToolMode === 'carve' ? 'crosshair'
-                          : activeToolMode === 'flow' ? 'pointer'
-                          : 'grab';
+                          : activeToolMode === 'flow' ? 'pointer' : 'grab';
     }
   });
 
-  // Set initial mode
   setToolMode('pan');
 }
 
