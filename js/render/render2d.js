@@ -1,0 +1,375 @@
+// Canvas 2D renderer — full resolution with bicubic terrain interpolation
+
+import state from '../data/state.js';
+import { MIN_WATER, CONTOUR_INTERVAL, MAJOR_CONTOUR_EVERY, LAYERS } from '../data/constants.js';
+import { lerp, sampleGrid, sampleGridFast } from '../util/math.js';
+import { layerColorTextured, getBeachiness } from '../util/helpers.js';
+
+export function render(canvas, ctx, maxDepth) {
+  const { terrain, water, isOceanCell, saturation, hardnessNoise,
+          flowSpeed, waterSmooth, sources, tectonicStress, faultStress,
+          fluxL, fluxR, fluxU, fluxD, fluxUL, fluxUR, fluxDL, fluxDR,
+          GW, GH, seaLevel, camX, camY, camZoom,
+          viewMode, showContours, showLayers, showPressure, showVelocity,
+          showFaultLines, showStreams, waterThresh, gravity,
+          waterOpacityUI } = state;
+
+  const W = canvas.width, H = canvas.height;
+  const N = GW * GH;
+  if (!state.imgFull || state.imgFull.width !== W || state.imgFull.height !== H) {
+    state.imgFull = ctx.createImageData(W, H);
+  }
+  // waterSmooth is computed in pipeline.js every step
+  const ws = state.waterSmooth || water;
+
+  const d = state.imgFull.data;
+  const REF_DEPTH = 0.04;
+  const viewSize = GW / camZoom;
+  const pxToGrid = viewSize / W;
+  const pyToGrid = viewSize / H;
+
+  // Compute stats for overlays
+  let statMin = Infinity, statMax = -Infinity, statSum = 0, statCount = 0;
+  const statSamples = [];
+  const sampleStride = Math.max(1, Math.floor(N / 5000));
+  if (showVelocity && flowSpeed) {
+    for (let i = 0; i < N; i++) {
+      if (water[i] > 0.001) {
+        const v = flowSpeed[i];
+        if (v < statMin) statMin = v;
+        if (v > statMax) statMax = v;
+        statSum += v; statCount++;
+        if (i % sampleStride === 0) statSamples.push(v);
+      }
+    }
+  } else if (showPressure) {
+    for (let i = 0; i < N; i++) {
+      if (water[i] > 0.001) {
+        const v = water[i];
+        if (v < statMin) statMin = v;
+        if (v > statMax) statMax = v;
+        statSum += v; statCount++;
+        if (i % sampleStride === 0) statSamples.push(v);
+      }
+    }
+  }
+  statSamples.sort((a, b) => a - b);
+  const statMedian = statSamples.length > 0 ? statSamples[Math.floor(statSamples.length / 2)] : 0;
+  const statQ1 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.25)] : statMin;
+  const statQ3 = statSamples.length > 3 ? statSamples[Math.floor(statSamples.length * 0.75)] : statMax;
+  const velScale = statSamples.length > 10 ? statSamples[Math.floor(statSamples.length * 0.95)] : 1;
+
+  for (let py = 0; py < H; py++) {
+    const gyf = camY + py * pyToGrid;
+    for (let px = 0; px < W; px++) {
+      const gxf = camX + px * pxToGrid;
+      const off = (py * W + px) * 4;
+
+      if (gxf < 0 || gxf >= GW - 1 || gyf < 0 || gyf >= GH - 1) {
+        d[off] = 13; d[off+1] = 17; d[off+2] = 23; d[off+3] = 255;
+        continue;
+      }
+
+      let tr, tg, tb;
+      const gx = Math.min(GW - 1, gxf | 0);
+      const gy = Math.min(GH - 1, gyf | 0);
+      const ci = gy * GW + gx;
+      const h = sampleGridFast(terrain, gxf, gyf);
+      const isOcean = isOceanCell ? isOceanCell[ci] : false;
+      const w = Math.max(0, sampleGridFast(ws, gxf, gyf));
+
+      // Precompute adjacent terrain samples — used by hillshading and contours
+      const hR = sampleGridFast(terrain, gxf + pxToGrid, gyf);
+      const hD = sampleGridFast(terrain, gxf, gyf + pyToGrid);
+
+      if (viewMode === 'height') {
+        const v = Math.max(0, Math.min(255, h * 280)) | 0;
+        tr = v; tg = v; tb = v;
+      } else {
+        // Default: geological layer view with hillshading + texture
+        // NW illumination: terrain sloping up to the SE (dzdx>0, dzdy>0) is shadowed;
+        // terrain sloping up to the NW is bright.
+        const dzdx = (hR - h) / pxToGrid;
+        const dzdy = (hD - h) / pyToGrid;
+        const hillGrad = -dzdx - dzdy; // positive = NW-facing = bright
+        const hillShade = Math.max(0.2, Math.min(1.0, 0.62 + hillGrad * 5));
+        const satShade = saturation ? (0.85 + (1 - saturation[ci]) * 0.15) : 1.0;
+        const shade = hillShade * satShade;
+
+        const lc = layerColorTextured(ci);
+        tr = Math.min(255, lc.r * shade) | 0;
+        tg = Math.min(255, lc.g * shade) | 0;
+        tb = Math.min(255, lc.b * shade) | 0;
+      }
+
+      // Beach sand tint
+      {
+        const beach = getBeachiness(ci);
+        if (beach > 0.1) {
+          const b = beach * 0.7;
+          tr = tr * (1 - b) + 220 * b | 0;
+          tg = tg * (1 - b) + 200 * b | 0;
+          tb = tb * (1 - b) + 150 * b | 0;
+        }
+      }
+
+      // Contour lines (reuse hR/hD from above)
+      if (showContours) {
+        const lvl  = Math.floor(h / CONTOUR_INTERVAL);
+        const lvlR = Math.floor(hR / CONTOUR_INTERVAL);
+        const lvlD = Math.floor(hD / CONTOUR_INTERVAL);
+        if (lvl !== lvlR || lvl !== lvlD) {
+          const crossLvl = Math.max(lvl, lvlR, lvlD);
+          const isMajor = crossLvl % MAJOR_CONTOUR_EVERY === 0;
+          const boost = isMajor ? 55 : 20;
+          tr = Math.min(255, tr + boost);
+          tg = Math.min(255, tg + boost);
+          tb = Math.min(255, tb + boost);
+        }
+      }
+
+      // Water overlay — depth contrast curve
+      // Thin films (sheet flow) render nearly invisible. Only concentrated
+      // water in channels and pools shows as blue. This makes rivers pop
+      // against the terrain instead of everything being a uniform wash.
+      //
+      // Curve: alpha = depth^2.5 — steep ramp that suppresses thin films
+      // but lets deep channels show strongly.
+      if (w > (isOcean ? 0.001 : waterThresh)) {
+        const depth = Math.min(1, w / REF_DEPTH);
+        const alphaMin = state.waterAlphaMin || 0.15;
+        const alphaDepth = state.waterAlphaDepth || 0.85;
+        const alpha = isOcean
+          ? Math.min(1, 0.6 + depth * 0.4) * waterOpacityUI
+          : Math.min(1, alphaMin + depth * alphaDepth) * waterOpacityUI;
+
+        let wr, wg, wb;
+        if (showPressure) {
+          const pN = Math.min(1, w * gravity * 1.5);
+          wr = lerp(15, 180, pN) | 0; wg = lerp(60, 230, pN) | 0; wb = lerp(180, 255, pN) | 0;
+        } else if (showVelocity) {
+          let rawSpd = flowSpeed ? flowSpeed[ci] : 0;
+          if (flowSpeed && ci > GW && ci < N - GW) {
+            rawSpd = (flowSpeed[ci] * 0.4 +
+              (flowSpeed[ci-1] + flowSpeed[ci+1] + flowSpeed[ci-GW] + flowSpeed[ci+GW]) * 0.15);
+          }
+          const spd = Math.min(1, velScale > 0 ? rawSpd / velScale : 0);
+          if (spd < 0.5) {
+            const t2 = spd * 2;
+            wr = lerp(20, 50, t2) | 0; wg = lerp(40, 220, t2) | 0; wb = lerp(180, 80, t2) | 0;
+          } else {
+            const t2 = (spd - 0.5) * 2;
+            wr = lerp(50, 255, t2) | 0; wg = lerp(220, 100, t2) | 0; wb = lerp(80, 20, t2) | 0;
+          }
+        } else {
+          // Base color from sliders, darkens with depth
+          const bcr = state.waterColorR || 30, bcg = state.waterColorG || 100, bcb = state.waterColorB || 210;
+          wr = lerp(bcr, bcr * 0.5, depth) | 0;
+          wg = lerp(bcg, bcg * 0.5, depth) | 0;
+          wb = lerp(bcb, bcb * 0.85, depth) | 0;
+        }
+
+        const a = alpha;
+        tr = tr * (1 - a) + wr * a | 0;
+        tg = tg * (1 - a) + wg * a | 0;
+        tb = tb * (1 - a) + wb * a | 0;
+      }
+
+      // Stream highlight — pink overlay on cells with high total flux.
+      // Shows where water is actively flowing as a stream (attracting neighbors).
+      // Excludes ocean cells. Uses flow speed * flux to highlight moving streams,
+      // not stagnant pools or the ocean basin.
+      if (showStreams && fluxL && fluxR && fluxU && fluxD && !isOcean && water[ci] > 0.001) {
+        const totalFlux = fluxL[ci] + fluxR[ci] + fluxU[ci] + fluxD[ci]
+                        + (fluxUL ? fluxUL[ci] : 0) + (fluxUR ? fluxUR[ci] : 0)
+                        + (fluxDL ? fluxDL[ci] : 0) + (fluxDR ? fluxDR[ci] : 0);
+        const spd = flowSpeed ? flowSpeed[ci] : 0;
+        const streamScore = totalFlux * spd; // high flux AND high speed = active stream
+        if (streamScore > 0.001) {
+          const intensity = Math.min(1, streamScore * 20);
+          const sa = intensity * 0.7;
+          tr = tr * (1 - sa) + 255 * sa | 0;
+          tg = tg * (1 - sa) +  60 * sa | 0;
+          tb = tb * (1 - sa) + 200 * sa | 0;
+        }
+      }
+
+      d[off] = tr; d[off+1] = tg; d[off+2] = tb; d[off+3] = 255;
+    }
+  }
+
+  ctx.putImageData(state.imgFull, 0, 0);
+
+  const g2sx = gx => (gx - camX) / viewSize * W;
+  const g2sy = gy => (gy - camY) / viewSize * H;
+  const cellPx = W / viewSize;
+
+  // Fault line overlay
+  if (showFaultLines && tectonicStress) {
+    ctx.globalAlpha = 0.6;
+    for (let gy = 0; gy < GH; gy++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const i = gy * GW + gx;
+        const s = tectonicStress[i];
+        const f = faultStress ? faultStress[i] : 0;
+        const absS = Math.abs(s);
+        if (absS < 0.05 && f < 0.1) continue;
+        const sx = g2sx(gx), sy = g2sy(gy);
+        if (sx < -cellPx || sx > W + cellPx || sy < -cellPx || sy > H + cellPx) continue;
+        if (s > 0.05) ctx.fillStyle = `rgba(255,60,30,${Math.min(0.8, absS * 2)})`;
+        else if (s < -0.05) ctx.fillStyle = `rgba(180,50,255,${Math.min(0.8, absS * 2)})`;
+        else if (f > 0.1) ctx.fillStyle = `rgba(255,220,40,${Math.min(0.8, f * 0.5)})`;
+        else continue;
+        ctx.fillRect(sx, sy, Math.max(1, cellPx), Math.max(1, cellPx));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Flow direction arrows
+  if (showVelocity && fluxL && fluxR && fluxU && fluxD) {
+    const arrowSpacing = Math.max(2, Math.floor(4 / camZoom));
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1;
+    for (let gy = arrowSpacing; gy < GH - 1; gy += arrowSpacing) {
+      for (let gx = arrowSpacing; gx < GW - 1; gx += arrowSpacing) {
+        const i = gy * GW + gx;
+        if (water[i] < 0.001) continue;
+        const wd = Math.max(water[i], 0.01);
+        const D = 0.707;
+        const vx = (fluxR[i] - fluxL[i]
+                  + ((fluxUR ? fluxUR[i] : 0) + (fluxDR ? fluxDR[i] : 0)) * D
+                  - ((fluxUL ? fluxUL[i] : 0) + (fluxDL ? fluxDL[i] : 0)) * D) / wd;
+        const vy = (fluxD[i] - fluxU[i]
+                  + ((fluxDL ? fluxDL[i] : 0) + (fluxDR ? fluxDR[i] : 0)) * D
+                  - ((fluxUL ? fluxUL[i] : 0) + (fluxUR ? fluxUR[i] : 0)) * D) / wd;
+        const mag = Math.sqrt(vx * vx + vy * vy);
+        if (mag < 0.01) continue;
+        const cx = g2sx(gx + 0.5);
+        const cy = g2sy(gy + 0.5);
+        if (cx < 0 || cx > W || cy < 0 || cy > H) continue;
+        const arrowLen = Math.min(cellPx * 1.5, cellPx * 0.3 + (mag / (velScale || 1)) * cellPx);
+        const nx = vx / mag, ny = vy / mag;
+        const ex = cx + nx * arrowLen;
+        const ey = cy + ny * arrowLen;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        const headLen = Math.min(4, arrowLen * 0.35);
+        const ax = -nx * headLen, ay = -ny * headLen;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex + ax - ay * 0.4, ey + ay + ax * 0.4);
+        ctx.lineTo(ex + ax + ay * 0.4, ey + ay - ax * 0.4);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Off-screen river markers — drawn on map edges
+  if (state.offscreenRivers) {
+    for (const rv of state.offscreenRivers) {
+      // Compute current animated position in screen space (phase is advanced in sim, not here)
+      const swayPos = rv.swayAmp * Math.sin(rv.swayPhase);
+      const curT = Math.max(0.01, Math.min(0.99, rv.edgeT + swayPos));
+      const angOsc = rv.swayAmp * (Math.PI / 3) * Math.sin(rv.swayPhase + 1.1);
+      const curAng = rv.angle + angOsc;
+
+      // Compute screen coordinates of the entry point
+      let ex, ey, arrowDirX, arrowDirY;
+      if (rv.edge === 'left') {
+        ex = g2sx(0); ey = g2sy(curT * GH);
+        arrowDirX = Math.cos(curAng); arrowDirY = Math.sin(curAng);
+      } else if (rv.edge === 'right') {
+        ex = g2sx(GW); ey = g2sy(curT * GH);
+        arrowDirX = -Math.cos(curAng); arrowDirY = Math.sin(curAng);
+      } else if (rv.edge === 'top') {
+        ex = g2sx(curT * GW); ey = g2sy(0);
+        arrowDirX = Math.sin(curAng); arrowDirY = Math.cos(curAng);
+      } else {
+        ex = g2sx(curT * GW); ey = g2sy(GH);
+        arrowDirX = Math.sin(curAng); arrowDirY = -Math.cos(curAng);
+      }
+
+      const color = rv.enabled ? '#6ecbf5' : '#444';
+      const len = 18, headLen = 6;
+
+      // Arrow body
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = rv.enabled ? 0.9 : 0.4;
+      ctx.beginPath();
+      ctx.moveTo(ex - arrowDirX * len, ey - arrowDirY * len);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      // Arrowhead
+      ctx.fillStyle = color;
+      const ax = -arrowDirX * headLen, ay = -arrowDirY * headLen;
+      const px2 = -arrowDirY * headLen * 0.5, py2 = arrowDirX * headLen * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex + ax - px2, ey + ay - py2);
+      ctx.lineTo(ex + ax + px2, ey + ay + py2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Width indicator along edge
+      const edgeLen2 = (rv.edge === 'left' || rv.edge === 'right') ? GH : GW;
+      const halfW = rv.width * edgeLen2 * 0.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = rv.enabled ? 0.5 : 0.2;
+      ctx.beginPath();
+      if (rv.edge === 'left' || rv.edge === 'right') {
+        const bx = g2sx(rv.edge === 'left' ? 0 : GW);
+        ctx.moveTo(bx, g2sy(rv.edgeT * GH - halfW));
+        ctx.lineTo(bx, g2sy(rv.edgeT * GH + halfW));
+      } else {
+        const by = g2sy(rv.edge === 'top' ? 0 : GH);
+        ctx.moveTo(g2sx(rv.edgeT * GW - halfW), by);
+        ctx.lineTo(g2sx(rv.edgeT * GW + halfW), by);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Source markers
+  for (const src of sources) {
+    const sx = g2sx(src.gx + 0.5), sy = g2sy(src.gy + 0.5);
+    if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(100,200,255,0.5)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(150,230,255,0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // 5-number stats overlay
+  if ((showPressure || showVelocity) && statCount > 0) {
+    const label = showVelocity ? 'Velocity' : 'Pressure';
+    const fmt = v => v < 0.001 ? v.toExponential(1) : v < 1 ? v.toFixed(3) : v.toFixed(1);
+    const lines = [
+      `${label} (${statCount} wet cells)`,
+      `Min: ${fmt(statMin)}`,
+      `Q1:  ${fmt(statQ1)}`,
+      `Med: ${fmt(statMedian)}`,
+      `Q3:  ${fmt(statQ3)}`,
+      `Max: ${fmt(statMax)}`,
+    ];
+    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(13,17,23,0.8)';
+    const bx = W - 130, by = 8;
+    ctx.fillRect(bx, by, 122, lines.length * 14 + 8);
+    ctx.fillStyle = '#58a6ff';
+    lines.forEach((line, idx) => {
+      ctx.fillStyle = idx === 0 ? '#8b949e' : '#58a6ff';
+      ctx.fillText(line, bx + 6, by + 14 + idx * 14);
+    });
+  }
+}
