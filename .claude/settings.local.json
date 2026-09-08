@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/ianhandy/Programming/repos/river-meander/.claude/worktrees/naughty-vaughan/js/*.js)",
+      "Bash(python3 -m http.server 8080)",
+      "Bash(curl -s http://localhost:8080/js/main.js)",
+      "Bash(lsof -ti:8080)",
+      "Bash(xargs kill:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(/usr/local/bin/node --version)",
+      "Bash(/opt/homebrew/bin/node --version)",
+      "Bash(curl -s http://localhost:8080/js/data/state.js)",
+      "Bash(curl -s http://localhost:8080/js/sim/pipeline.js)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(lsof -ti:8091)",
+      "Bash(/usr/local/bin/node --check js/sim/water.js)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create --title 'Ground-up rewrite: delta-buffer architecture, pressure-based erosion' --body ':*)",
+      "Bash(git add:*)",
+      "Bash(gh pr *)",
+      "Bash(git -C /Users/ianhandy/Programming/repos/ianhandy.com log --all --oneline --grep=\"claude\" -i)",
+      "Bash(git -C /Users/ianhandy/Programming/repos/ianhandy.com log --all --oneline --grep=\"anthropic\" -i)"
+    ]
+  }
+}
